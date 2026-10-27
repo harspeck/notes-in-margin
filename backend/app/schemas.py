@@ -92,3 +92,31 @@ class MemoReorderRequest(BaseModel):
 class CodeFamilyUpdate(BaseModel):
     name: str | None = None
     definition: str | None = None
+
+
+class CodeFamilyCreate(BaseModel):
+    name: str
+    definition: str
+    connection_ids: list[int] = []
+
+
+class CodeFamilyMembersUpdate(BaseModel):
+    connection_ids: list[int]
+
+
+class CodeFamilyMergeRequest(BaseModel):
+    family_ids: list[int]
+    name: str
+    definition: str
+
+
+class StarRequest(BaseModel):
+    starred: bool
+
+
+class FocusRequest(BaseModel):
+    focused: bool
+
+
+class RQMergeRequest(BaseModel):
+    target_id: int

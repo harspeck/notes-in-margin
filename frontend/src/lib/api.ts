@@ -1,5 +1,8 @@
 import type {
+  CodebookPrep,
   CodeFamily,
+  CodeFamilyCap,
+  CodeFamilyMergeResult,
   CodeFamilyState,
   ConnectionEvidence,
   ConversationDetail,
@@ -7,8 +10,11 @@ import type {
   Highlight,
   MemoResponse,
   NextStepSuggestion,
+  OrganizeResponse,
   ResearchQuestion,
   ReviewResult,
+  RQMergeResult,
+  RQMergeUndoResult,
   VoiceMemo,
 } from "./types";
 
@@ -58,6 +64,18 @@ export const api = {
     request<ResearchQuestion>(`/research_questions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   reorderResearchQuestions: (orderedIds: number[]) =>
     request(`/research_questions/reorder`, { method: "PUT", body: JSON.stringify({ ordered_ids: orderedIds }) }),
+  setResearchQuestionFocus: (id: number, focused: boolean) =>
+    request<ResearchQuestion>(`/research_questions/${id}/focus`, { method: "POST", body: JSON.stringify({ focused }) }),
+  mergeResearchQuestion: (id: number, targetId: number) =>
+    request<RQMergeResult>(`/research_questions/${id}/merge_into`, {
+      method: "POST",
+      body: JSON.stringify({ target_id: targetId }),
+    }),
+  undoResearchQuestionMerge: (mergeId: number) =>
+    request<RQMergeUndoResult>(`/rq_merges/${mergeId}/undo`, { method: "POST" }),
+
+  getOrganize: () => request<OrganizeResponse>("/organize"),
+  getCodebookPrep: () => request<CodebookPrep>("/codebook_prep"),
 
   uploadVoiceMemo: (conversationId: number, audio: Blob, duration: number) => {
     const form = new FormData();
@@ -106,6 +124,20 @@ export const api = {
   dismissCodeFamilyMerge: (id: number) => request(`/code_family_merges/${id}/dismiss`, { method: "POST" }),
   updateCodeFamily: (id: number, body: { name?: string; definition?: string }) =>
     request<CodeFamily>(`/code_families/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  createCodeFamily: (rqId: number, body: { name: string; definition: string; connection_ids: number[] }) =>
+    request<{ family: CodeFamily; cap: CodeFamilyCap }>(`/research_questions/${rqId}/code_families`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  setCodeFamilyMembers: (id: number, connectionIds: number[]) =>
+    request<CodeFamily>(`/code_families/${id}/members`, {
+      method: "PUT",
+      body: JSON.stringify({ connection_ids: connectionIds }),
+    }),
+  starCodeFamily: (id: number, starred: boolean) =>
+    request<CodeFamily>(`/code_families/${id}/star`, { method: "POST", body: JSON.stringify({ starred }) }),
+  mergeCodeFamilies: (body: { family_ids: number[]; name: string; definition: string }) =>
+    request<CodeFamilyMergeResult>("/code_families/merge", { method: "POST", body: JSON.stringify(body) }),
   acceptCodeFamily: (id: number) => request(`/code_families/${id}/accept`, { method: "POST" }),
   dismissCodeFamily: (id: number) => request(`/code_families/${id}/dismiss`, { method: "POST" }),
 
@@ -114,5 +146,7 @@ export const api = {
     request(`/settings/review-prompt`, { method: "PUT", body: JSON.stringify({ text }) }),
   resetReviewPrompt: () => request<{ text: string }>(`/settings/review-prompt/reset`, { method: "POST" }),
 };
+
+export const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export const audioUrlFor = (audioPath: string) => `${BASE}/audio/${audioPath.split("/").pop()}`;

@@ -40,8 +40,8 @@ Every command below was run and worked on 2026-10-26.
 | Setup (frontend) | `cd frontend && npm install` |
 | Run backend | `cd backend && .venv/bin/uvicorn app.main:app --port 8000` (no `--reload`; `GET /health` → `{"ok":true}`) |
 | Run frontend | `cd frontend && npm run dev`, then open http://localhost:5173 |
-| Test | `cd backend && .venv/bin/python -m pytest -q` (50 tests, about 1.5 s) |
-| Lint | `cd frontend && npm run lint` (oxlint; exits 0 with 9 existing warnings) |
+| Test | `cd backend && .venv/bin/python -m pytest -q` (78 tests, about 1.7 s) |
+| Lint | `cd frontend && npm run lint` (oxlint; exits 0 with 10 existing warnings) |
 | Typecheck | `cd frontend && npx tsc -b --noEmit` |
 | Build | `cd frontend && npm run build` |
 | Back up | `cd backend && .venv/bin/python scripts/export_md.py` (Markdown export plus a SQLite copy into `db/local/`; `--no-db-backup`, `--out-dir DIR`) |
@@ -98,12 +98,19 @@ can break.
 
 **Code families** (`services/code_families.py`, `routers/code_families.py`)
 - The per-RQ cap counts only `LIVE_FAMILY_STATUSES = ("suggested", "accepted")`, against `config.code_families` (`max_per_rq: 5`, `near_cap_at: 4`, `max_new_per_run: 2`), and is enforced server-side. `override_cap` still limits a run to `max_new_per_run`.
-- Accepting a merge re-checks that every source family is still live, and returns 409 if not, because the merge suggestion may be stale.
+- Accepting a merge re-checks that every source family is still live, and returns 409 if not, because the merge suggestion may be stale. A user merge (`POST /code_families/merge`) and an accepted suggestion share `merge_families`.
+- Every user edit to a family (rename, members, merge) writes a `CodeFamilyRevision` first, because `code_family_member` rows are deleted when a member is removed and the revision is their audit trail.
+- Starring a family (`rl_code_family_star`) also accepts a `suggested` one, because only user-filed families may reach the codebook export. Starring a `dismissed` or `merged` family returns 409.
+
+**RQ merges and focus** (`services/rq_merges.py`, `routers/research_questions.py`, `routers/organize.py`)
+- Every RQ-scoped read (memo sections, code family lists, the cap, synthesis input, `/organize`, `/codebook_prep`) goes through `resolve_rq_id` and `rq_group_ids`, because a merged RQ's entries and families keep their own `research_question_id` and must read under the target. `services/code_families.group_for` wraps both.
+- A merge archives the source; undo sets `rl_rq_merge.status = "undone"` and un-archives it. Merge rows are never deleted. Merging an archived source, into an archived or merged target, or into itself returns 409, and so does un-archiving a merged RQ through `PATCH /research_questions/{id}`.
 
 **Values defined twice. Change both together.**
 - `FILED_STATUSES = ("accepted", "edited")` is in both `routers/memo.py` and `services/code_families.py`.
 - The voice memo cap: `voice_memo.max_duration_seconds: 1200` in `config.yaml`, and `MAX_VOICE_MEMO_SECONDS = 1200` in `frontend/src/pages/ReaderPage.tsx`.
-- Status values: each backend status (for example the code family's `merged`) also appears in a union in `frontend/src/lib/types.ts`.
+- Status values: each backend status (for example the code family's `merged`) also appears in a union in `frontend/src/lib/types.ts`. This includes `rl_rq_merge.status` (`"active" | "undone"`), in the `RQMerge` type in `types.ts`.
+- The focus range `(5, 7)`: `FOCUS_RANGE` in `routers/organize.py`, which `GET /organize` also returns as `focus_range`.
 
 ### Where the detail lives
 

@@ -18,6 +18,7 @@ from ..models_prototype import (
     VoiceMemo,
 )
 from ..schemas import MemoEntryUpdate, MemoReorderRequest
+from ..services.rq_merges import active_merge_edges, resolve_rq_id, rq_group_ids
 
 router = APIRouter(prefix="/memo", tags=["memo"])
 config = get_config()
@@ -75,11 +76,19 @@ def get_memo(
     ]
     text_by_span = quoted_texts(cortico_db, evidence_spans)
 
+    # A merged RQ has no section of its own; its entries read under its final target.
+    edges = active_merge_edges(prototype_db)
+    research_questions = [rq for rq in research_questions if rq.id not in edges]
     by_rq: dict[int | None, list[ReflectionConnection]] = {rq.id: [] for rq in research_questions}
     unmapped: list[ReflectionConnection] = []
     for c in connections:
-        if c.research_question_id is not None and c.research_question_id in by_rq:
-            by_rq[c.research_question_id].append(c)
+        rq_id = (
+            resolve_rq_id(prototype_db, c.research_question_id, edges)
+            if c.research_question_id is not None
+            else None
+        )
+        if rq_id is not None and rq_id in by_rq:
+            by_rq[rq_id].append(c)
         else:
             unmapped.append(c)
 
@@ -124,6 +133,7 @@ def get_memo(
             "research_question_id": rq.id,
             "name": rq.name,
             "archived": rq.archived,
+            "merged_from": rq_group_ids(prototype_db, rq.id, edges)[1:],
             "entries": [entry(c) for c in ordered(by_rq[rq.id])],
         }
         for rq in research_questions
@@ -219,9 +229,10 @@ def retract_memo_entry(connection_id: int, prototype_db: Session = Depends(get_p
 
 @router.put("/reorder")
 def reorder_memo_entries(body: MemoReorderRequest, prototype_db: Session = Depends(get_prototype_db)):
+    group = set(rq_group_ids(prototype_db, body.research_question_id))
     for order, connection_id in enumerate(body.ordered_connection_ids):
         c = prototype_db.get(ReflectionConnection, connection_id)
-        if c is not None and c.research_question_id == body.research_question_id:
+        if c is not None and c.research_question_id in group:
             c.memo_order = order
     prototype_db.commit()
     return {"reordered": True}

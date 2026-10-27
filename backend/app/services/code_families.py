@@ -15,7 +15,15 @@ from sqlalchemy.orm import Session
 
 from ..config import CodeFamiliesConfig, Config
 from ..evidence_text import quoted_texts
-from ..models_prototype import CodeFamily, CodeFamilyMember, CodeFamilyMergeSuggestion, ReflectionConnection
+from ..models_prototype import (
+    CodeFamily,
+    CodeFamilyMember,
+    CodeFamilyMergeSuggestion,
+    CodeFamilyRevision,
+    CodeFamilyStar,
+    ReflectionConnection,
+)
+from .rq_merges import resolve_rq_id, rq_group_ids
 
 FILED_STATUSES = ("accepted", "edited")
 # Families that count toward the per-RQ cap and that the model may attach to or merge.
@@ -90,11 +98,17 @@ _OUTPUT_SCHEMA = {
 }
 
 
+def group_for(prototype_db: Session, research_question_id: int) -> list[int]:
+    """The merged-RQ group research_question_id reads as: its final target plus every RQ
+    merged into that target. A single-element list for an unmerged RQ."""
+    return rq_group_ids(prototype_db, resolve_rq_id(prototype_db, research_question_id))
+
+
 def _filed_connections_for_rq(prototype_db: Session, research_question_id: int) -> list[ReflectionConnection]:
     return (
         prototype_db.query(ReflectionConnection)
         .filter(
-            ReflectionConnection.research_question_id == research_question_id,
+            ReflectionConnection.research_question_id.in_(group_for(prototype_db, research_question_id)),
             ReflectionConnection.status.in_(FILED_STATUSES),
         )
         .all()
@@ -107,7 +121,7 @@ def _valid_connection_ids(prototype_db: Session, research_question_id: int) -> s
     rows = (
         prototype_db.query(ReflectionConnection.id)
         .filter(
-            ReflectionConnection.research_question_id == research_question_id,
+            ReflectionConnection.research_question_id.in_(group_for(prototype_db, research_question_id)),
             ReflectionConnection.status.in_(FILED_STATUSES),
         )
         .all()
@@ -134,7 +148,7 @@ def _existing_families_context(
     families = (
         prototype_db.query(CodeFamily)
         .filter(
-            CodeFamily.research_question_id == research_question_id,
+            CodeFamily.research_question_id.in_(group_for(prototype_db, research_question_id)),
             CodeFamily.status.in_(LIVE_FAMILY_STATUSES),
         )
         .all()
@@ -223,7 +237,7 @@ def _apply_merge_suggestions(
     pending_sets = {
         frozenset(json.loads(m.family_ids_json))
         for m in prototype_db.query(CodeFamilyMergeSuggestion).filter(
-            CodeFamilyMergeSuggestion.research_question_id == research_question_id,
+            CodeFamilyMergeSuggestion.research_question_id.in_(group_for(prototype_db, research_question_id)),
             CodeFamilyMergeSuggestion.status == "suggested",
         )
     }
@@ -260,31 +274,86 @@ def _merge_target(prototype_db: Session, family_ids: list[int]) -> int:
     return families[0].id
 
 
-def accept_merge(prototype_db: Session, suggestion: CodeFamilyMergeSuggestion) -> CodeFamily:
-    """Folds every source family's members into the target, renames the target to the
-    proposed name/definition, and marks the other sources "merged" (kept, not deleted).
-    Re-checks that every source family is still live, since the user may have dismissed one
-    since the suggestion was made."""
-    family_ids = json.loads(suggestion.family_ids_json)
-    families = {f.id: f for f in prototype_db.query(CodeFamily).filter(CodeFamily.id.in_(family_ids))}
-    if any(families.get(fid) is None or families[fid].status not in LIVE_FAMILY_STATUSES for fid in family_ids):
-        raise ValueError("one of the families in this merge is no longer active")
+def write_revision(prototype_db: Session, family: CodeFamily) -> None:
+    """Snapshot the family before a user edit changes it."""
+    prototype_db.add(
+        CodeFamilyRevision(
+            code_family_id=family.id,
+            name=family.name,
+            definition=family.definition,
+            member_connection_ids_json=json.dumps([m.connection_id for m in family.members]),
+        )
+    )
 
-    target = families[suggestion.target_family_id]
+
+def starred_family_ids(prototype_db: Session, family_ids: list[int]) -> set[int]:
+    if not family_ids:
+        return set()
+    return {
+        s.code_family_id
+        for s in prototype_db.query(CodeFamilyStar).filter(
+            CodeFamilyStar.code_family_id.in_(family_ids), CodeFamilyStar.starred.is_(True)
+        )
+    }
+
+
+def set_star(prototype_db: Session, family: CodeFamily, starred: bool) -> None:
+    star = prototype_db.get(CodeFamilyStar, family.id)
+    if star is None:
+        star = CodeFamilyStar(code_family_id=family.id)
+        prototype_db.add(star)
+    star.starred = starred
+    if starred and family.status == "suggested":
+        family.status = "accepted"  # only user-filed families reach the codebook
+
+
+def merge_families(
+    prototype_db: Session, *, target: CodeFamily, sources: list[CodeFamily], name: str, definition: str
+) -> CodeFamily:
+    """Folds every source family's members into target, renames it, accepts it, and marks
+    the sources "merged" (kept, not deleted). The caller checks the families are live and
+    commits. A family built across a merged RQ group moves to the group's target RQ, so
+    undoing the RQ merge leaves it there."""
+    write_revision(prototype_db, target)
     member_ids = {m.connection_id for m in target.members}
-    for fid in family_ids:
-        if fid == target.id:
+    for source in sources:
+        if source.id == target.id:
             continue
-        source = families[fid]
         for m in source.members:
             if m.connection_id not in member_ids:
                 prototype_db.add(CodeFamilyMember(code_family_id=target.id, connection_id=m.connection_id))
                 member_ids.add(m.connection_id)
         source.status = "merged"
 
-    target.name = suggestion.proposed_name
-    target.definition = suggestion.proposed_definition
-    target.status = "accepted"  # accepting the merge is the user deciding on this family
+    all_ids = [target.id] + [f.id for f in sources]
+    if starred_family_ids(prototype_db, all_ids):
+        set_star(prototype_db, target, True)
+    rq_ids = {target.research_question_id} | {f.research_question_id for f in sources}
+    if len(rq_ids) > 1:
+        target.research_question_id = resolve_rq_id(prototype_db, target.research_question_id)
+
+    target.name = name
+    target.definition = definition
+    target.status = "accepted"  # merging is the user deciding on this family
+    return target
+
+
+def accept_merge(prototype_db: Session, suggestion: CodeFamilyMergeSuggestion) -> CodeFamily:
+    """Applies an AI merge suggestion through merge_families. Re-checks that every source
+    family is still live, since the user may have dismissed one since the suggestion was
+    made."""
+    family_ids = json.loads(suggestion.family_ids_json)
+    families = {f.id: f for f in prototype_db.query(CodeFamily).filter(CodeFamily.id.in_(family_ids))}
+    if any(families.get(fid) is None or families[fid].status not in LIVE_FAMILY_STATUSES for fid in family_ids):
+        raise ValueError("one of the families in this merge is no longer active")
+
+    target = merge_families(
+        prototype_db,
+        target=families[suggestion.target_family_id],
+        sources=[families[fid] for fid in family_ids if fid != suggestion.target_family_id],
+        name=suggestion.proposed_name,
+        definition=suggestion.proposed_definition,
+    )
     suggestion.status = "accepted"
     prototype_db.commit()
     prototype_db.refresh(target)
@@ -326,6 +395,7 @@ def synthesize_code_families(
     research_question_id: int,
     override_cap: bool = False,
 ) -> SynthesisResult:
+    research_question_id = resolve_rq_id(prototype_db, research_question_id)  # new rows go to the target
     existing_families, existing_context = _existing_families_context(prototype_db, research_question_id)
     cap = cap_status(len(existing_families), config.code_families, override_cap)
 

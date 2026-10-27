@@ -16,6 +16,7 @@ from .routers import (
     highlights,
     memo,
     next_steps,
+    organize,
     research_questions,
     review,
     settings,
@@ -49,11 +50,13 @@ app.include_router(conversations.router)
 app.include_router(highlights.router)
 app.include_router(checkpoints.router)
 app.include_router(research_questions.router)
+app.include_router(research_questions.rq_merges_router)
 app.include_router(voice_memos.router)
 app.include_router(review.router)
 app.include_router(memo.router)
 app.include_router(next_steps.router)
 app.include_router(code_families.router)
+app.include_router(organize.router)
 app.include_router(settings.router)
 
 

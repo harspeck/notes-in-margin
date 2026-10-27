@@ -216,3 +216,39 @@ Closes the four Phase 1 acceptance criteria the 2026-10-14 audit left open, all 
   highlight refused, memo edit keeps link). Frontend changes were clicked through in the
   browser 2026-10-26: `yours` badges on backfilled evidence, memo evidence links scrolling
   to the cited snippet, "Assign to: RQ" in review, and "Starred, unassigned".
+
+## Organize page backend (2026-10-26)
+
+Adds the step before codebook generation (`docs/prd-phase-2.md`, "Follow-up work"): focus a
+working set of RQs, merge RQs, edit and star code families, and export a draft codebook.
+
+- **New tables only**, so `db/prototype.db` needs no migration: `rl_rq_focus`,
+  `rl_rq_merge`, `rl_code_family_star` and `rl_code_family_revision`. The `rl_` prefix is
+  needed because `codebook`, `code` and `coding` exist in `db/schema.sql`; the four names
+  were grepped against it and don't collide.
+- **RQ merges** (`backend/app/services/rq_merges.py`): a merge archives the source and is
+  undone by status. Rows keep their own `research_question_id`; reads resolve them through
+  `resolve_rq_id` and `rq_group_ids`. `GET /memo` now omits a merged RQ's section and lists
+  its entries under the target (each section gains `merged_from`), so
+  `scripts/export_md.py`, which calls `get_memo`, agrees. The code family cap, synthesis
+  input and merge suggestions count the whole group, and new AI families go to the target.
+- **Refused merges** (409): into itself, into an archived or merged RQ, a source that is
+  already merged, an archived source (because undo un-archives it, which would lose the
+  earlier archived state; a deviation from the plan, which didn't mention it), and anything
+  closing a cycle. `PATCH /research_questions/{id}` also refuses to un-archive a merged RQ.
+- **Undo** reports families that stay with the target although they hold entries from the
+  restored RQ (`families_kept_with_target`); these are families the user merged or built
+  across the two while they were merged.
+- **Family edits**: user-created families are `accepted` with no `ai_metadata` and are not
+  capped. Members, rename and merge write `rl_code_family_revision` first. Starring a
+  `suggested` family accepts it. `accept_merge` now goes through a shared
+  `merge_families`.
+- **Organize payload** additions beyond the plan: each group has an `entries` list
+  (connection id, insight text, its own RQ, conversation id and title, and the family ids
+  it is in), which the "Add entries" picker needs; and `merged_sources` items carry
+  `into_id`, the RQ they were merged directly into, because sources are listed
+  transitively.
+- **Codebook prep** (`GET /codebook_prep`) is read-only and writes no file, so the backups
+  in `db/local/` are untouched. Retracted member entries are left out.
+- Tests: `test_rq_merges.py`, `test_code_family_edits.py`, `test_organize.py` (78 tests in
+  all). None calls the model.
