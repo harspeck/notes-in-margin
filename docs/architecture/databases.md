@@ -33,7 +33,19 @@ Snapshot facts the code depends on (`docs/prototype-log.md`):
 `research_question`, `rl_highlight`, `highlight_snippet`, `voice_memo`,
 `reflection_connection`, `connection_evidence`, `reflection_connection_revision`,
 `transcript_state`, `section_checkpoint`, `conversation_gist`, `next_step_suggestion`,
-`code_family`, `code_family_member`, `code_family_merge_suggestion`, `app_setting`.
+`code_family`, `code_family_member`, `code_family_merge_suggestion`, `app_setting`,
+`rl_rq_focus`, `rl_rq_merge`, `rl_code_family_star`, `rl_code_family_revision`.
+
+The last four back the Organize page (2026-10-26). They carry the `rl_` prefix because
+`codebook`, `code` and `coding` already exist in `db/schema.sql`. They were added as new
+tables, not columns, so `create_all` picks them up on the dev database without a migration.
+
+| Table | Key columns | Purpose |
+|---|---|---|
+| `rl_rq_focus` | `research_question_id` (PK), `user_id`, `focused`, `updated_at` | The Organize page's focus flag. A missing row means not focused. |
+| `rl_rq_merge` | `id`, `user_id`, `source_rq_id`, `target_rq_id`, `status` (`active` or `undone`), `created_at`, `undone_at` | One row per RQ merge. Undo sets the status; rows are never deleted. |
+| `rl_code_family_star` | `code_family_id` (PK), `starred`, `updated_at` | Star flag. Starred live families go into `/codebook_prep`. |
+| `rl_code_family_revision` | `id`, `code_family_id`, `name`, `definition`, `member_connection_ids_json`, `changed_at` | Snapshot written before each user edit to a family, so removed `code_family_member` rows stay auditable. |
 
 ## Schema lifecycle
 
@@ -53,7 +65,11 @@ Snapshot facts the code depends on (`docs/prototype-log.md`):
 - Never write through `CorticoSession` or a Cortico model, because the snapshot is source
   data. The engine refuses writes anyway.
 - Rejecting, dismissing, merging or retracting a row sets a status. Rows are never deleted,
-  because the trail must stay auditable.
+  because the trail must stay auditable. The one exception is a `code_family_member` row
+  removed by `PUT /code_families/{id}/members`, which is audited by the
+  `rl_code_family_revision` row written before it.
+- A merged RQ's rows keep their own `research_question_id`. Reads resolve them to the
+  target through `services/rq_merges.py` (`resolve_rq_id`, `rq_group_ids`).
 - `section_checkpoint` has a unique constraint on (user, conversation, guide question), and
   `PUT /conversations/{id}/checkpoints` upserts against it. The question must belong to the
   conversation's resolved guide.

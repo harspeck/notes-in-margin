@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, audioUrlFor } from "../lib/api";
+import { CodeFamilyCard, MergeSuggestionCard } from "../components/CodeFamilyCard";
 import type {
-  CodeFamily,
-  CodeFamilyMergeSuggestion,
   CodeFamilyState,
   MemoEntry,
   MemoResponse,
@@ -133,132 +132,6 @@ function NextStepView({ suggestion, onChanged }: { suggestion: NextStepSuggestio
           {suggestion.status}
         </div>
       )}
-    </div>
-  );
-}
-
-function CodeFamilyCard({ family, onChanged }: { family: CodeFamily; onChanged: () => void }) {
-  const [expanded, setExpanded] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(family.name);
-  const [definition, setDefinition] = useState(family.definition);
-
-  async function save() {
-    await api.updateCodeFamily(family.id, { name, definition });
-    setEditing(false);
-    onChanged();
-  }
-
-  async function accept() {
-    await api.acceptCodeFamily(family.id);
-    onChanged();
-  }
-
-  async function dismiss() {
-    await api.dismissCodeFamily(family.id);
-    onChanged();
-  }
-
-  return (
-    <div className="memo-entry">
-      {editing ? (
-        <>
-          <input style={{ width: "100%" }} value={name} onChange={(e) => setName(e.target.value)} />
-          <textarea
-            rows={2}
-            style={{ width: "100%", marginTop: "0.3rem" }}
-            value={definition}
-            onChange={(e) => setDefinition(e.target.value)}
-          />
-          <button className="primary" onClick={save}>
-            Save
-          </button>
-          <button className="secondary" onClick={() => setEditing(false)} style={{ marginLeft: "0.3rem" }}>
-            Cancel
-          </button>
-        </>
-      ) : (
-        <>
-          <strong>{family.name}</strong>
-          <p style={{ margin: 0 }}>{family.definition}</p>
-        </>
-      )}
-      <div className="meta">
-        <button style={{ fontSize: "0.8rem" }} onClick={() => setExpanded(!expanded)}>
-          {family.members.length} member{family.members.length === 1 ? "" : "s"} {expanded ? "▲" : "▼"}
-        </button>
-      </div>
-      {expanded && (
-        <ul style={{ margin: "0.3rem 0" }}>
-          {family.members.map((m) => (
-            <li key={m.connection_id} style={{ fontSize: "0.85rem" }}>
-              {m.insight_text}
-            </li>
-          ))}
-        </ul>
-      )}
-      {!editing && (
-        <div style={{ marginTop: "0.3rem" }}>
-          <button className="secondary" onClick={() => setEditing(true)}>
-            Rename/redefine
-          </button>
-          {family.status === "suggested" && (
-            <button className="primary" onClick={accept} style={{ marginLeft: "0.3rem" }}>
-              Accept
-            </button>
-          )}
-          {family.status !== "dismissed" && (
-            <button className="secondary" onClick={dismiss} style={{ marginLeft: "0.3rem" }}>
-              Dismiss
-            </button>
-          )}
-          {family.status !== "suggested" && (
-            <span className="meta" style={{ fontStyle: "italic", marginLeft: "0.5rem" }}>
-              {family.status}
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MergeSuggestionCard({
-  merge,
-  families,
-  onChanged,
-}: {
-  merge: CodeFamilyMergeSuggestion;
-  families: CodeFamily[];
-  onChanged: (state?: CodeFamilyState) => void;
-}) {
-  const names = merge.family_ids.map((id) => families.find((f) => f.id === id)?.name ?? `#${id}`);
-
-  async function accept() {
-    onChanged(await api.acceptCodeFamilyMerge(merge.id));
-  }
-
-  async function dismiss() {
-    await api.dismissCodeFamilyMerge(merge.id);
-    onChanged();
-  }
-
-  return (
-    <div className="memo-entry" style={{ borderLeft: "3px solid #e0b84a", paddingLeft: "0.6rem" }}>
-      <div className="meta">Suggested merge: {names.join(" + ")}</div>
-      <strong>{merge.proposed_name}</strong>
-      <p style={{ margin: 0 }}>{merge.proposed_definition}</p>
-      {merge.rationale && (
-        <p className="meta" style={{ margin: "0.2rem 0" }}>
-          {merge.rationale}
-        </p>
-      )}
-      <button className="primary" onClick={accept}>
-        Merge
-      </button>
-      <button className="secondary" onClick={dismiss} style={{ marginLeft: "0.3rem" }}>
-        Keep separate
-      </button>
     </div>
   );
 }

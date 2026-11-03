@@ -18,6 +18,7 @@ from ..models_prototype import (
     VoiceMemo,
 )
 from ..schemas import MemoEntryUpdate, MemoReorderRequest
+from ..services.rq_merges import active_merge_edges, resolve_rq_id, rq_group_ids
 
 router = APIRouter(prefix="/memo", tags=["memo"])
 config = get_config()
@@ -25,15 +26,95 @@ config = get_config()
 FILED_STATUSES = ("accepted", "edited")
 
 
+def filed_connections(prototype_db: Session) -> list[ReflectionConnection]:
+    return prototype_db.query(ReflectionConnection).filter(ReflectionConnection.status.in_(FILED_STATUSES)).all()
+
+
+def starred_highlights(prototype_db: Session) -> list[RLHighlight]:
+    return (
+        prototype_db.query(RLHighlight)
+        .filter(RLHighlight.user_id == config.default_user_id, RLHighlight.starred.is_(True))
+        .all()
+    )
+
+
+def evidence_texts(
+    cortico_db: Session, connections: list[ReflectionConnection], highlights: list[RLHighlight]
+) -> dict[tuple[int, int, int], str]:
+    """Quoted text for every evidence span of `connections` and every snippet span of `highlights`."""
+    spans = [(e.snippet_id, e.start_index, e.end_index) for c in connections for e in c.evidence]
+    spans += [(s.snippet_id, s.start_index, s.end_index) for h in highlights for s in h.snippets]
+    return quoted_texts(cortico_db, spans)
+
+
+def evidence_serializer(prototype_db: Session, connections: list[ReflectionConnection], text_by_span: dict):
+    """Returns a function that serializes one connection's evidence list, with each row's
+    highlight star and quoted text."""
+    cited = [e.highlight_id for c in connections for e in c.evidence if e.highlight_id is not None]
+    starred_by_highlight = (
+        {h.id: h.starred for h in prototype_db.query(RLHighlight).filter(RLHighlight.id.in_(cited))}
+        if cited
+        else {}
+    )
+
+    def serialize(c: ReflectionConnection) -> list[dict]:
+        return [
+            {
+                "highlight_id": e.highlight_id,
+                "snippet_id": e.snippet_id,
+                "start_index": e.start_index,
+                "end_index": e.end_index,
+                "source": e.source,
+                "starred": starred_by_highlight.get(e.highlight_id, False),
+                "text": text_by_span.get((e.snippet_id, e.start_index, e.end_index), ""),
+            }
+            for e in c.evidence
+        ]
+
+    return serialize
+
+
+def starred_unassigned_groups(
+    cortico_db: Session,
+    connections: list[ReflectionConnection],
+    highlights: list[RLHighlight],
+    text_by_span: dict,
+) -> list[dict]:
+    """Starred highlights not cited by any of `connections` (pass every filed connection),
+    grouped by conversation."""
+    cited = assigned_highlight_ids(connections)
+    groups: dict[int, dict] = {}
+    for h in highlights:
+        if h.id in cited:
+            continue
+        conv = cortico_db.get(Conversation, h.conversation_id)
+        group = groups.setdefault(
+            h.conversation_id,
+            {"conversation_id": h.conversation_id, "conversation_title": conv.title if conv else None, "highlights": []},
+        )
+        group["highlights"].append(
+            {
+                "highlight_id": h.id,
+                "notes": h.notes,
+                "snippets": [
+                    {
+                        "snippet_id": s.snippet_id,
+                        "start_index": s.start_index,
+                        "end_index": s.end_index,
+                        "text": text_by_span.get((s.snippet_id, s.start_index, s.end_index), ""),
+                    }
+                    for s in h.snippets
+                ],
+            }
+        )
+    return list(groups.values())
+
+
 @router.get("")
 def get_memo(
     cortico_db: Session = Depends(get_cortico_db), prototype_db: Session = Depends(get_prototype_db)
 ):
-    connections = (
-        prototype_db.query(ReflectionConnection)
-        .filter(ReflectionConnection.status.in_(FILED_STATUSES))
-        .all()
-    )
+    connections = filed_connections(prototype_db)
 
     voice_memo_ids = {c.voice_memo_id for c in connections}
     voice_memos = {
@@ -47,18 +128,6 @@ def get_memo(
         else {}
     )
 
-    cited_highlight_ids = [
-        e.highlight_id for c in connections for e in c.evidence if e.highlight_id is not None
-    ]
-    starred_by_highlight = (
-        {
-            h.id: h.starred
-            for h in prototype_db.query(RLHighlight).filter(RLHighlight.id.in_(cited_highlight_ids))
-        }
-        if cited_highlight_ids
-        else {}
-    )
-
     research_questions = (
         prototype_db.query(ResearchQuestion)
         .filter(ResearchQuestion.user_id == config.default_user_id)
@@ -66,20 +135,23 @@ def get_memo(
         .all()
     )
 
-    all_starred_highlights = prototype_db.query(RLHighlight).filter(
-        RLHighlight.user_id == config.default_user_id, RLHighlight.starred.is_(True)
-    ).all()
-    evidence_spans = [(e.snippet_id, e.start_index, e.end_index) for c in connections for e in c.evidence]
-    evidence_spans += [
-        (s.snippet_id, s.start_index, s.end_index) for h in all_starred_highlights for s in h.snippets
-    ]
-    text_by_span = quoted_texts(cortico_db, evidence_spans)
+    all_starred_highlights = starred_highlights(prototype_db)
+    text_by_span = evidence_texts(cortico_db, connections, all_starred_highlights)
+    serialize_evidence = evidence_serializer(prototype_db, connections, text_by_span)
 
+    # A merged RQ has no section of its own; its entries read under its final target.
+    edges = active_merge_edges(prototype_db)
+    research_questions = [rq for rq in research_questions if rq.id not in edges]
     by_rq: dict[int | None, list[ReflectionConnection]] = {rq.id: [] for rq in research_questions}
     unmapped: list[ReflectionConnection] = []
     for c in connections:
-        if c.research_question_id is not None and c.research_question_id in by_rq:
-            by_rq[c.research_question_id].append(c)
+        rq_id = (
+            resolve_rq_id(prototype_db, c.research_question_id, edges)
+            if c.research_question_id is not None
+            else None
+        )
+        if rq_id is not None and rq_id in by_rq:
+            by_rq[rq_id].append(c)
         else:
             unmapped.append(c)
 
@@ -102,18 +174,7 @@ def get_memo(
             # created before this field existed.
             "reflection_timestamp": ai_metadata.get("reflection_timestamp") if ai_metadata else None,
             "filed_at": c.updated_at.isoformat(),
-            "evidence": [
-                {
-                    "highlight_id": e.highlight_id,
-                    "snippet_id": e.snippet_id,
-                    "start_index": e.start_index,
-                    "end_index": e.end_index,
-                    "source": e.source,
-                    "starred": starred_by_highlight.get(e.highlight_id, False),
-                    "text": text_by_span.get((e.snippet_id, e.start_index, e.end_index), ""),
-                }
-                for e in c.evidence
-            ],
+            "evidence": serialize_evidence(c),
         }
 
     def ordered(conns: list[ReflectionConnection]) -> list[ReflectionConnection]:
@@ -124,42 +185,16 @@ def get_memo(
             "research_question_id": rq.id,
             "name": rq.name,
             "archived": rq.archived,
+            "merged_from": rq_group_ids(prototype_db, rq.id, edges)[1:],
             "entries": [entry(c) for c in ordered(by_rq[rq.id])],
         }
         for rq in research_questions
     ]
 
-    # Starred highlights not cited by any filed connection on an RQ, grouped by conversation.
-    all_cited_highlight_ids = assigned_highlight_ids(connections)
-    starred_unassigned: dict[int, dict] = {}
-    for h in all_starred_highlights:
-        if h.id in all_cited_highlight_ids:
-            continue
-        conv = cortico_db.get(Conversation, h.conversation_id)
-        group = starred_unassigned.setdefault(
-            h.conversation_id,
-            {"conversation_id": h.conversation_id, "conversation_title": conv.title if conv else None, "highlights": []},
-        )
-        group["highlights"].append(
-            {
-                "highlight_id": h.id,
-                "notes": h.notes,
-                "snippets": [
-                    {
-                        "snippet_id": s.snippet_id,
-                        "start_index": s.start_index,
-                        "end_index": s.end_index,
-                        "text": text_by_span.get((s.snippet_id, s.start_index, s.end_index), ""),
-                    }
-                    for s in h.snippets
-                ],
-            }
-        )
-
     return {
         "sections": sections,
         "unmapped": [entry(c) for c in ordered(unmapped)],
-        "starred_unassigned": list(starred_unassigned.values()),
+        "starred_unassigned": starred_unassigned_groups(cortico_db, connections, all_starred_highlights, text_by_span),
     }
 
 
@@ -219,9 +254,10 @@ def retract_memo_entry(connection_id: int, prototype_db: Session = Depends(get_p
 
 @router.put("/reorder")
 def reorder_memo_entries(body: MemoReorderRequest, prototype_db: Session = Depends(get_prototype_db)):
+    group = set(rq_group_ids(prototype_db, body.research_question_id))
     for order, connection_id in enumerate(body.ordered_connection_ids):
         c = prototype_db.get(ReflectionConnection, connection_id)
-        if c is not None and c.research_question_id == body.research_question_id:
+        if c is not None and c.research_question_id in group:
             c.memo_order = order
     prototype_db.commit()
     return {"reordered": True}

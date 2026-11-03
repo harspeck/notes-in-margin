@@ -69,6 +69,35 @@ export interface ResearchQuestion {
   description: string | null;
   display_order: number;
   archived: boolean;
+  focused: boolean;
+  merged_into: number | null;
+  merged_sources: RQMergedSource[];
+}
+
+export interface RQMergedSource {
+  merge_id: number;
+  id: number;
+  name: string | null;
+  into_id: number;
+}
+
+export interface RQMerge {
+  id: number;
+  source_rq_id: number;
+  target_rq_id: number;
+  status: "active" | "undone";
+  created_at: string;
+  undone_at: string | null;
+}
+
+export interface RQMergeResult {
+  merge: RQMerge;
+  source: ResearchQuestion;
+  target: ResearchQuestion;
+}
+
+export interface RQMergeUndoResult extends RQMergeResult {
+  families_kept_with_target: { id: number; name: string }[];
 }
 
 export interface VoiceMemo {
@@ -145,6 +174,7 @@ export interface MemoSection {
   research_question_id: number;
   name: string;
   archived: boolean;
+  merged_from: number[];
   entries: MemoEntry[];
 }
 
@@ -183,6 +213,7 @@ export interface CodeFamily {
   name: string;
   definition: string;
   status: "suggested" | "accepted" | "dismissed" | "merged";
+  starred: boolean;
   members: CodeFamilyMember[];
   ai_metadata: { model: string; reasoning_effort: string; prompt: string } | null;
   created_at: string;
@@ -200,9 +231,77 @@ export interface CodeFamilyMergeSuggestion {
   created_at: string;
 }
 
+export interface CodeFamilyCap {
+  live_count: number;
+  max_per_rq: number;
+  near_cap: boolean;
+  at_cap: boolean;
+}
+
 export interface CodeFamilyState {
   families: CodeFamily[];
   merge_suggestions: CodeFamilyMergeSuggestion[];
-  cap: { live_count: number; max_per_rq: number; near_cap: boolean; at_cap: boolean };
+  cap: CodeFamilyCap;
   withheld_new_families: number;
+}
+
+export interface CodeFamilyMergeResult extends CodeFamilyState {
+  family: CodeFamily;
+}
+
+export interface OrganizeEntry {
+  connection_id: number;
+  insight_text: string;
+  research_question_id: number;
+  conversation_id: number | null;
+  conversation_title: string | null;
+  voice_memo_id: number;
+  family_ids: number[];
+  evidence: ConnectionEvidence[];
+}
+
+export interface OrganizeGroup {
+  rq: ResearchQuestion;
+  merged_sources: RQMergedSource[];
+  entry_count: number;
+  entries: OrganizeEntry[];
+  families: CodeFamily[];
+  cap: CodeFamilyCap;
+  starred_unassigned: MemoStarredUnassignedGroup[];
+}
+
+export interface OrganizeResponse {
+  focused: OrganizeGroup[];
+  other: OrganizeGroup[];
+  focus_count: number;
+  focus_range: [number, number];
+}
+
+export interface CodebookEvidence {
+  snippet_id: number;
+  start_index: number;
+  end_index: number;
+  text: string;
+  source: EvidenceSource;
+}
+
+export interface CodebookCode {
+  family_id: number;
+  name: string;
+  definition: string;
+  status: CodeFamily["status"];
+  entries: { connection_id: number; insight_text: string; conversation_id: number | null; evidence: CodebookEvidence[] }[];
+}
+
+export interface CodebookPrep {
+  generated_at: string;
+  user_id: number;
+  research_questions: {
+    id: number;
+    name: string;
+    description: string | null;
+    merged_from: number[];
+    codes: CodebookCode[];
+  }[];
+  warnings: string[];
 }

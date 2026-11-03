@@ -234,6 +234,52 @@ class CodeFamilyMergeSuggestion(PrototypeBase):
     updated_at = Column(DateTime, nullable=False, default=_now, onupdate=_now)
 
 
+class RQFocus(PrototypeBase):
+    """Whether the user has picked this RQ for their working set on the Organize page. A
+    missing row means not focused."""
+
+    __tablename__ = "rl_rq_focus"
+    research_question_id = Column(Integer, ForeignKey("research_question.id"), primary_key=True)
+    user_id = Column(Integer, nullable=False)
+    focused = Column(Boolean, nullable=False, default=False)
+    updated_at = Column(DateTime, nullable=False, default=_now, onupdate=_now)
+
+
+class RQMerge(PrototypeBase):
+    """One user merge of a research question into another. The source is archived and its
+    entries and families read under the target (services/rq_merges.py). Undo sets the
+    status; the row is kept."""
+
+    __tablename__ = "rl_rq_merge"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False)
+    source_rq_id = Column(Integer, ForeignKey("research_question.id"), nullable=False)
+    target_rq_id = Column(Integer, ForeignKey("research_question.id"), nullable=False)
+    status = Column(String, nullable=False, default="active")  # active -> undone
+    created_at = Column(DateTime, nullable=False, default=_now)
+    undone_at = Column(DateTime)
+
+
+class CodeFamilyStar(PrototypeBase):
+    __tablename__ = "rl_code_family_star"
+    code_family_id = Column(Integer, ForeignKey("code_family.id"), primary_key=True)
+    starred = Column(Boolean, nullable=False, default=False)
+    updated_at = Column(DateTime, nullable=False, default=_now, onupdate=_now)
+
+
+class CodeFamilyRevision(PrototypeBase):
+    """Snapshot of a family taken before each user edit (rename, membership, merge), so a
+    removed member stays auditable even though its code_family_member row is deleted."""
+
+    __tablename__ = "rl_code_family_revision"
+    id = Column(Integer, primary_key=True)
+    code_family_id = Column(Integer, ForeignKey("code_family.id"), nullable=False)
+    name = Column(String, nullable=False)
+    definition = Column(Text, nullable=False)
+    member_connection_ids_json = Column(Text, nullable=False)  # JSON list of connection ids
+    changed_at = Column(DateTime, nullable=False, default=_now)
+
+
 class AppSetting(PrototypeBase):
     """Not in the PRD's data model — added to persist the editable AI-review prompt
     (view/save/reset-to-default) across restarts. See docs/prototype-log.md."""

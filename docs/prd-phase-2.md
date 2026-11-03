@@ -267,3 +267,8 @@ never changes anything the user sees as "decided."
 - **Codebook generation and tagging**, the next phase once the open questions above are
   settled. Code families become parent codes with child codes under them, and codes get
   assigned to highlights/snippets.
+  - *2026-10-26: the codebook-prep step before this is delivered by the Organize page.
+    The user focuses 5-7 RQs, merges RQs (reversibly), creates, edits, merges and stars
+    code families, and downloads `GET /codebook_prep`, a JSON draft of the focused RQs'
+    starred families with evidence, for separate codebook code. Codebook generation and
+    tagging themselves are still to do. See `docs/prototype-log.md`.*
