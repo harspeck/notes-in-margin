@@ -11,7 +11,9 @@ from app.models_prototype import (
     CodeFamilyMember,
     CodeFamilyStar,
     ConnectionEvidence,
+    HighlightSnippet,
     ReflectionConnection,
+    RLHighlight,
     ResearchQuestion,
     VoiceMemo,
 )
@@ -27,8 +29,8 @@ def _rq(db, name="organize rq") -> int:
     return rq.id
 
 
-def _connection(db, rq_id, status="accepted", insight="an insight", evidence=()) -> int:
-    vm = VoiceMemo(user_id=USER, conversation_id=9, audio_path="x", status="filed")
+def _connection(db, rq_id, status="accepted", insight="an insight", evidence=(), conversation_id=9) -> int:
+    vm = VoiceMemo(user_id=USER, conversation_id=conversation_id, audio_path="x", status="filed")
     db.add(vm)
     db.commit()
     c = ReflectionConnection(
@@ -36,8 +38,18 @@ def _connection(db, rq_id, status="accepted", insight="an insight", evidence=())
     )
     db.add(c)
     db.commit()
-    for snippet_id, start, end in evidence:
-        db.add(ConnectionEvidence(connection_id=c.id, snippet_id=snippet_id, start_index=start, end_index=end, source="ai"))
+    for ev in evidence:
+        snippet_id, start, end, highlight_id = (*ev, None) if len(ev) == 3 else ev
+        db.add(
+            ConnectionEvidence(
+                connection_id=c.id,
+                snippet_id=snippet_id,
+                start_index=start,
+                end_index=end,
+                source="user" if highlight_id else "ai",
+                highlight_id=highlight_id,
+            )
+        )
     db.commit()
     return c.id
 
@@ -52,6 +64,15 @@ def _family(db, rq_id, name="fam", status="accepted", member_ids=(), starred=Fal
         db.add(CodeFamilyStar(code_family_id=f.id, starred=True))
     db.commit()
     return f.id
+
+
+def _highlight(db, conversation_id, snippet_id, start, end, starred=True, notes="a margin note") -> int:
+    h = RLHighlight(user_id=USER, conversation_id=conversation_id, project_id=5, notes=notes, starred=starred)
+    db.add(h)
+    db.commit()
+    db.add(HighlightSnippet(highlight_id=h.id, snippet_id=snippet_id, start_index=start, end_index=end))
+    db.commit()
+    return h.id
 
 
 def _focus(rq_id, focused=True):
@@ -153,3 +174,49 @@ def test_codebook_prep_warns_about_a_focused_rq_without_starred_families():
     assert any("nothing starred here" in w and "no starred" in w for w in prep["warnings"])
     by_id = {r["id"]: r for r in prep["research_questions"]}
     assert by_id[rq]["codes"] == []
+
+
+def test_organize_entries_carry_the_same_evidence_as_the_memo():
+    with PrototypeSession() as db:
+        rq = _rq(db, "org evidence")
+        cited = _highlight(db, 9, 1936, 0, 4)
+        c = _connection(db, rq, insight="with evidence", evidence=[(1936, 0, 4, cited), (1936, 4, 8)])
+        vm_id = db.get(ReflectionConnection, c).voice_memo_id
+
+    (entry,) = _groups(client.get("/organize").json())[rq]["entries"]
+    assert entry["voice_memo_id"] == vm_id
+    ev = entry["evidence"]
+    assert [(e["highlight_id"], e["source"], e["starred"]) for e in ev] == [(cited, "user", True), (None, "ai", False)]
+    assert all(e["text"] for e in ev)
+    assert set(ev[0]) == {"highlight_id", "snippet_id", "start_index", "end_index", "source", "starred", "text"}
+
+    memo = client.get("/memo").json()
+    (memo_entry,) = [e for s in memo["sections"] for e in s["entries"] if e["connection_id"] == c]
+    assert memo_entry["evidence"] == ev and memo_entry["voice_memo_id"] == vm_id
+
+
+def test_organize_starred_unassigned_matches_memo_for_the_groups_conversations():
+    with PrototypeSession() as db:
+        rq, empty = _rq(db, "org starred"), _rq(db, "org no entries")
+        cited = _highlight(db, 9, 1936, 0, 4)
+        loose = _highlight(db, 9, 1936, 4, 8, notes="loose")
+        unstarred = _highlight(db, 9, 1936, 8, 12, starred=False)
+        elsewhere = _highlight(db, 10, 1, 0, 2)
+        _connection(db, rq, evidence=[(1936, 0, 4, cited)])
+
+    payload = client.get("/organize").json()
+    groups = _groups(payload)
+    g = groups[rq]
+    assert [u["conversation_id"] for u in g["starred_unassigned"]] == [9]
+    (conv9,) = g["starred_unassigned"]
+    assert conv9["conversation_title"]
+    ids = {h["highlight_id"] for h in conv9["highlights"]}
+    assert loose in ids and cited not in ids and unstarred not in ids and elsewhere not in ids
+    loose_row = next(h for h in conv9["highlights"] if h["highlight_id"] == loose)
+    assert loose_row["notes"] == "loose"
+    assert loose_row["snippets"][0]["snippet_id"] == 1936 and loose_row["snippets"][0]["text"]
+    assert groups[empty]["starred_unassigned"] == []
+
+    memo_by_conv = {u["conversation_id"]: u for u in client.get("/memo").json()["starred_unassigned"]}
+    assert conv9 == memo_by_conv[9]
+    assert elsewhere in {h["highlight_id"] for h in memo_by_conv[10]["highlights"]}

@@ -45,6 +45,8 @@ export function CodeFamilyCard({
   addableEntries,
   selected,
   onSelect,
+  active,
+  onToggleActive,
 }: {
   family: CodeFamily;
   onChanged: () => void;
@@ -52,6 +54,9 @@ export function CodeFamilyCard({
   addableEntries?: PickableEntry[];
   selected?: boolean;
   onSelect?: () => void;
+  /** When given, the family name becomes a toggle (e.g. to highlight its members elsewhere). */
+  active?: boolean;
+  onToggleActive?: () => void;
 }) {
   const editableMembers = addableEntries !== undefined;
   const [expanded, setExpanded] = useState(editableMembers);
@@ -92,7 +97,7 @@ export function CodeFamilyCard({
     });
 
   return (
-    <div className="memo-entry">
+    <div className={"memo-entry" + (active ? " family-active" : "")}>
       <div style={{ display: "flex", gap: "0.4rem", alignItems: "flex-start" }}>
         {onSelect && (
           <input type="checkbox" checked={!!selected} onChange={onSelect} aria-label={`Select ${family.name}`} />
@@ -125,7 +130,18 @@ export function CodeFamilyCard({
             </>
           ) : (
             <>
-              <strong>{family.name}</strong>
+              {onToggleActive ? (
+                <button
+                  className="family-name-toggle"
+                  onClick={onToggleActive}
+                  aria-pressed={!!active}
+                  title={active ? "Stop highlighting its entries" : "Highlight its entries"}
+                >
+                  {family.name}
+                </button>
+              ) : (
+                <strong>{family.name}</strong>
+              )}
               <p style={{ margin: 0 }}>{family.definition}</p>
             </>
           )}

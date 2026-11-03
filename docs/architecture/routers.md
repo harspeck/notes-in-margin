@@ -49,11 +49,26 @@ All routers live in `backend/app/routers/` and are registered in `backend/app/ma
 | | `POST /code_families/{family_id}/dismiss` | `dismiss_family` |
 | | `POST /code_family_merges/{merge_id}/accept` | `accept_merge_suggestion` (409 if not pending or stale) |
 | | `POST /code_family_merges/{merge_id}/dismiss` | `dismiss_merge_suggestion` |
-| organize | `GET /organize` | `get_organize` (focused and other RQ groups, merged sources folded into their target) |
+| organize | `GET /organize` | `get_organize` (focused and other RQ groups, merged sources folded into their target; see below) |
 | | `GET /codebook_prep` | `get_codebook_prep` (read-only JSON of focused RQs' starred families; nothing written server-side) |
 | settings | `GET /settings/review-prompt` | `get_review_prompt` |
 | | `PUT /settings/review-prompt` | `save_review_prompt` |
 | | `POST /settings/review-prompt/reset` | `reset_review_prompt` |
+
+## `GET /organize` shape
+
+`{focused: [group], other: [group], focus_count, focus_range: [5, 7]}`. Each group is
+`{rq, merged_sources, entry_count, entries, families, cap, starred_unassigned}`:
+
+- `entries[]`: `{connection_id, insight_text, research_question_id, conversation_id,
+  conversation_title, voice_memo_id, family_ids, evidence}`. `evidence[]` is
+  `{highlight_id, snippet_id, start_index, end_index, source, starred, text}`, built by
+  `evidence_serializer` in `routers/memo.py`, the same code path as `GET /memo` entries.
+- `starred_unassigned[]`: `{conversation_id, conversation_title, highlights: [{highlight_id,
+  notes, snippets: [{snippet_id, start_index, end_index, text}]}]}`. It is the set `GET /memo`
+  returns (`starred_unassigned_groups`, over every filed connection via
+  `assigned_highlight_ids`), restricted to the conversations the group's entries come from,
+  because highlights have no RQ link.
 
 ## Cross-cutting rules
 

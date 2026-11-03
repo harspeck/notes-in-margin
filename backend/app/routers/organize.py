@@ -13,6 +13,7 @@ from ..models_prototype import CodeFamily, ReflectionConnection, ResearchQuestio
 from ..services.code_families import FILED_STATUSES, starred_family_ids
 from ..services.rq_merges import active_merge_edges, rq_group_ids
 from .code_families import cap_dict, live_families_for_group, serialize_families
+from .memo import evidence_serializer, evidence_texts, filed_connections, starred_highlights, starred_unassigned_groups
 from .research_questions import serialize_rqs
 
 router = APIRouter(tags=["organize"])
@@ -76,7 +77,8 @@ def get_organize(
         group = rq_group_ids(prototype_db, rq.id, edges)
         loaded.append((_filed_connections(prototype_db, group), live_families_for_group(prototype_db, group)))
 
-    conv_by_connection = _conversation_ids(prototype_db, [c for conns, _ in loaded for c in conns])
+    group_connections = [c for conns, _ in loaded for c in conns]
+    conv_by_connection = _conversation_ids(prototype_db, group_connections)
     conv_ids = {cid for cid in conv_by_connection.values() if cid is not None}
     titles = (
         {c.id: c.title for c in cortico_db.query(Conversation).filter(Conversation.id.in_(conv_ids))}
@@ -84,8 +86,15 @@ def get_organize(
         else {}
     )
 
+    highlights = starred_highlights(prototype_db)
+    text_by_span = evidence_texts(cortico_db, group_connections, highlights)
+    serialize_evidence = evidence_serializer(prototype_db, group_connections, text_by_span)
+    # Computed against every filed connection, like GET /memo, then narrowed per group.
+    unassigned = starred_unassigned_groups(cortico_db, filed_connections(prototype_db), highlights, text_by_span)
+
     groups = []
     for rq_dict, (connections, families) in zip(serialized, loaded):
+        group_conv_ids = {conv_by_connection.get(c.id) for c in connections}
         family_ids_by_connection: dict[int, list[int]] = {}
         for f in families:
             for m in f.members:
@@ -102,12 +111,16 @@ def get_organize(
                         "research_question_id": c.research_question_id,
                         "conversation_id": conv_by_connection.get(c.id),
                         "conversation_title": titles.get(conv_by_connection.get(c.id)),
+                        "voice_memo_id": c.voice_memo_id,
                         "family_ids": family_ids_by_connection.get(c.id, []),
+                        "evidence": serialize_evidence(c),
                     }
                     for c in connections
                 ],
                 "families": serialize_families(prototype_db, families),
                 "cap": cap_dict(len(families)),
+                # Highlights carry no RQ, so a group shows those from conversations its entries came from.
+                "starred_unassigned": [u for u in unassigned if u["conversation_id"] in group_conv_ids],
             }
         )
 

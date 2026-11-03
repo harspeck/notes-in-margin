@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, errorText } from "../lib/api";
 import { CodeFamilyCard, EntryPicker } from "../components/CodeFamilyCard";
-import type { CodebookPrep, OrganizeGroup, OrganizeResponse, ResearchQuestion } from "../lib/types";
+import type {
+  CodebookPrep,
+  CodeFamily,
+  OrganizeEntry,
+  OrganizeGroup,
+  OrganizeResponse,
+  ResearchQuestion,
+} from "../lib/types";
 
 function toggleId(ids: number[], id: number) {
   return ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id];
@@ -210,104 +218,7 @@ function MergeFamiliesModal({
   );
 }
 
-function FocusedRQCard({
-  group,
-  allRqs,
-  onChanged,
-}: {
-  group: OrganizeGroup;
-  allRqs: ResearchQuestion[];
-  onChanged: (notice?: string) => void;
-}) {
-  const [selected, setSelected] = useState<number[]>([]);
-  const [merging, setMerging] = useState(false);
-  const unassigned = group.entries.filter((e) => e.family_ids.length === 0);
-  const liveSelected = selected.filter((id) => group.families.some((f) => f.id === id));
-  const { cap } = group;
-
-  return (
-    <div className="memo-section rq-card">
-      <div className="rq-card-header">
-        <h2>{group.rq.name}</h2>
-        <MergeIntoSelect rq={group.rq} targets={allRqs} onChanged={() => onChanged()} />
-      </div>
-      {group.rq.description && <p className="meta">{group.rq.description}</p>}
-      <MergedSources group={group} onChanged={onChanged} />
-      <p className="meta">
-        {group.entry_count} filed entr{group.entry_count === 1 ? "y" : "ies"}, {unassigned.length} in no family ·{" "}
-        {cap.live_count} of {cap.max_per_rq} families
-      </p>
-      {cap.at_cap && (
-        <p className="warning-text">
-          At the {cap.max_per_rq}-family cap. Merge or dismiss a family to make room.
-        </p>
-      )}
-      {!cap.at_cap && cap.near_cap && <p className="warning-text">Near the {cap.max_per_rq}-family cap.</p>}
-
-      {group.families.length === 0 && <p className="meta">No code families yet.</p>}
-      {group.families.map((f) => (
-        <CodeFamilyCard
-          key={f.id}
-          family={f}
-          onChanged={() => onChanged()}
-          addableEntries={unassigned}
-          selected={liveSelected.includes(f.id)}
-          onSelect={() => setSelected(toggleId(liveSelected, f.id))}
-        />
-      ))}
-
-      <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.6rem", flexWrap: "wrap" }}>
-        <NewFamilyForm group={group} onDone={() => onChanged()} />
-        {group.families.length > 1 && (
-          <button className="secondary" onClick={() => setMerging(true)} disabled={liveSelected.length < 2}>
-            Merge selected{liveSelected.length > 0 ? ` (${liveSelected.length})` : ""}
-          </button>
-        )}
-      </div>
-      {merging && (
-        <MergeFamiliesModal
-          group={group}
-          familyIds={liveSelected}
-          onClose={() => setMerging(false)}
-          onDone={() => {
-            setSelected([]);
-            onChanged();
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function OtherRQRow({
-  group,
-  allRqs,
-  onChanged,
-}: {
-  group: OrganizeGroup;
-  allRqs: ResearchQuestion[];
-  onChanged: (notice?: string) => void;
-}) {
-  const { error, run } = useAction(() => onChanged());
-  return (
-    <div className="memo-entry">
-      <div className="rq-card-header">
-        <strong>{group.rq.name}</strong>
-        <span className="meta">
-          {group.entry_count} entr{group.entry_count === 1 ? "y" : "ies"} · {group.cap.live_count} families
-        </span>
-        <button className="secondary" onClick={() => run(() => api.setResearchQuestionFocus(group.rq.id, true))}>
-          Focus
-        </button>
-        <MergeIntoSelect rq={group.rq} targets={allRqs} onChanged={() => onChanged()} />
-      </div>
-      <MergedSources group={group} onChanged={onChanged} />
-      {error && <p className="error-text">{error}</p>}
-    </div>
-  );
-}
-
-function CodebookFooter() {
+function CodebookPanel() {
   const [prep, setPrep] = useState<CodebookPrep | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -331,13 +242,13 @@ function CodebookFooter() {
     prep?.research_questions.reduce((n, rq) => n + rq.codes.reduce((m, c) => m + c.entries.length, 0), 0) ?? 0;
 
   return (
-    <div className="memo-section organize-footer">
-      <h2>Codebook</h2>
-      <p className="meta">
-        Exports the starred code families of the focused research questions, with each entry and its quoted evidence,
-        as a JSON file.
-      </p>
-      <button className="primary" onClick={prepare} disabled={busy}>
+    <div className="organize-codebook">
+      <button
+        className="primary"
+        onClick={prepare}
+        disabled={busy}
+        title="Downloads the starred code families of the focused research questions, with each entry and its quoted evidence, as JSON."
+      >
         {busy ? "Preparing…" : "Prepare codebook"}
       </button>
       {error && <p className="error-text">{error}</p>}
@@ -361,10 +272,313 @@ function CodebookFooter() {
   );
 }
 
+function RQSidebarRow({
+  group,
+  selected,
+  onSelect,
+  onToggleFocus,
+}: {
+  group: OrganizeGroup;
+  selected: boolean;
+  onSelect: () => void;
+  onToggleFocus: () => void;
+}) {
+  const { rq } = group;
+  return (
+    <li className={"rq-row" + (selected ? " selected" : "")}>
+      <button
+        className={"rq-focus-toggle" + (rq.focused ? " on" : "")}
+        onClick={onToggleFocus}
+        aria-pressed={rq.focused}
+        aria-label={rq.focused ? `Unfocus ${rq.name}` : `Focus ${rq.name}`}
+        title={rq.focused ? "Unfocus" : "Focus"}
+      >
+        {rq.focused ? "●" : "○"}
+      </button>
+      <button className="rq-row-name" onClick={onSelect} title={rq.name} aria-current={selected ? "true" : undefined}>
+        {rq.name}
+      </button>
+      <span className="rq-row-count" title={`${group.entry_count} filed entries`}>
+        {group.entry_count}
+      </span>
+    </li>
+  );
+}
+
+function RQSidebar({
+  data,
+  selectedId,
+  onSelect,
+  onChanged,
+}: {
+  data: OrganizeResponse;
+  selectedId: number | undefined;
+  onSelect: (id: number) => void;
+  onChanged: () => void;
+}) {
+  const { error, run } = useAction(onChanged);
+  const [low, high] = data.focus_range;
+  const inRange = data.focus_count >= low && data.focus_count <= high;
+  const row = (g: OrganizeGroup) => (
+    <RQSidebarRow
+      key={g.rq.id}
+      group={g}
+      selected={g.rq.id === selectedId}
+      onSelect={() => onSelect(g.rq.id)}
+      onToggleFocus={() => run(() => api.setResearchQuestionFocus(g.rq.id, !g.rq.focused))}
+    />
+  );
+
+  return (
+    <aside className="organize-col organize-sidebar">
+      <div className="organize-sidebar-header">
+        <h2>RQs</h2>
+        <span className={"focus-count" + (inRange ? "" : " off-range")}>
+          {data.focus_count} of {low}-{high} focused
+        </span>
+      </div>
+      {error && <p className="error-text">{error}</p>}
+      {data.focused.length === 0 && (
+        <p className="meta">Focus the {low}-{high} research questions you'll build the codebook from.</p>
+      )}
+      <ul className="rq-list">{data.focused.map(row)}</ul>
+      {data.other.length > 0 && (
+        <>
+          <div className="rq-divider">Other</div>
+          <ul className="rq-list">{data.other.map(row)}</ul>
+        </>
+      )}
+      <CodebookPanel />
+    </aside>
+  );
+}
+
+function AddToFamilySelect({ entry, families, onChanged }: { entry: OrganizeEntry; families: CodeFamily[]; onChanged: () => void }) {
+  const { error, run } = useAction(onChanged);
+  const options = families.filter((f) => !entry.family_ids.includes(f.id));
+  if (options.length === 0) return null;
+
+  function add(familyId: number) {
+    const family = options.find((f) => f.id === familyId);
+    if (!family) return;
+    run(() =>
+      api.setCodeFamilyMembers(family.id, [...family.members.map((m) => m.connection_id), entry.connection_id])
+    );
+  }
+
+  return (
+    <span>
+      <select className="add-to-family" value="" onChange={(e) => add(Number(e.target.value))}>
+        <option value="">+ add to family</option>
+        {options.map((f) => (
+          <option key={f.id} value={f.id}>
+            {f.name}
+          </option>
+        ))}
+      </select>
+      {error && <span className="error-text"> {error}</span>}
+    </span>
+  );
+}
+
+function InsightCard({
+  entry,
+  families,
+  activeFamilyId,
+  onToggleFamily,
+  onChanged,
+}: {
+  entry: OrganizeEntry;
+  families: CodeFamily[];
+  activeFamilyId: number | null;
+  onToggleFamily: (id: number) => void;
+  onChanged: () => void;
+}) {
+  const memberOf = families.filter((f) => entry.family_ids.includes(f.id));
+  const active = activeFamilyId !== null && entry.family_ids.includes(activeFamilyId);
+  return (
+    <div className={"insight" + (active ? " family-active" : "")}>
+      <p className="insight-text">{entry.insight_text}</p>
+      {entry.evidence.map((e, i) => (
+        <blockquote key={i} className="evidence-quote">
+          {e.starred && <span className="evidence-star" title="Starred highlight">★ </span>}
+          {entry.conversation_id != null ? (
+            <Link to={`/?conversation=${entry.conversation_id}&snippet=${e.snippet_id}`}>
+              "{e.text || `snippet ${e.snippet_id}`}"
+            </Link>
+          ) : (
+            `"${e.text || `snippet ${e.snippet_id}`}"`
+          )}{" "}
+          <span className={"badge " + (e.source === "user" ? "yours" : "ai")}>
+            {e.source === "user" ? "yours" : "AI-suggested"}
+          </span>
+        </blockquote>
+      ))}
+      <div className="meta">
+        {entry.conversation_id != null ? (
+          <Link to={`/?conversation=${entry.conversation_id}`}>{entry.conversation_title ?? `Conversation ${entry.conversation_id}`}</Link>
+        ) : (
+          "Unknown conversation"
+        )}
+        {entry.evidence.length === 0 && " · no quoted evidence"}
+      </div>
+      <div className="insight-families">
+        {memberOf.map((f) => (
+          <button
+            key={f.id}
+            className={"family-tag" + (f.id === activeFamilyId ? " on" : "")}
+            onClick={() => onToggleFamily(f.id)}
+            aria-pressed={f.id === activeFamilyId}
+            title="Highlight this family's entries"
+          >
+            {f.name}
+          </button>
+        ))}
+        <AddToFamilySelect entry={entry} families={families} onChanged={onChanged} />
+      </div>
+    </div>
+  );
+}
+
+function StarredNotCited({ group }: { group: OrganizeGroup }) {
+  if (group.starred_unassigned.length === 0) return null;
+  return (
+    <section className="starred-not-cited">
+      <h3>Starred, not yet cited</h3>
+      <p className="meta">Starred highlights from these conversations that no filed insight cites yet.</p>
+      {group.starred_unassigned.map((conv) => (
+        <div key={conv.conversation_id} className="starred-conversation">
+          <Link to={`/?conversation=${conv.conversation_id}`}>{conv.conversation_title ?? `Conversation ${conv.conversation_id}`}</Link>
+          {conv.highlights.map((h) => (
+            <div key={h.highlight_id} className="starred-highlight">
+              <div>★ {h.notes || <span className="meta">(no margin note)</span>}</div>
+              {h.snippets.map((s, i) => (
+                <blockquote key={i} className="evidence-quote">
+                  <Link to={`/?conversation=${conv.conversation_id}&snippet=${s.snippet_id}`}>
+                    "{s.text || `snippet ${s.snippet_id}`}"
+                  </Link>
+                </blockquote>
+              ))}
+            </div>
+          ))}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function RQDetail({
+  group,
+  allRqs,
+  activeFamilyId,
+  onToggleFamily,
+  onChanged,
+}: {
+  group: OrganizeGroup;
+  allRqs: ResearchQuestion[];
+  activeFamilyId: number | null;
+  onToggleFamily: (id: number) => void;
+  onChanged: (notice?: string) => void;
+}) {
+  const unassigned = group.entries.filter((e) => e.family_ids.length === 0);
+  return (
+    <>
+      <div className="rq-detail-header">
+        <h1>{group.rq.name}</h1>
+        <MergeIntoSelect rq={group.rq} targets={allRqs} onChanged={() => onChanged()} />
+      </div>
+      {group.rq.description && <p className="meta">{group.rq.description}</p>}
+      <MergedSources group={group} onChanged={onChanged} />
+      <p className="meta">
+        {group.entry_count} filed insight{group.entry_count === 1 ? "" : "s"}, {unassigned.length} in no family
+      </p>
+      {group.entries.length === 0 && <p className="meta">No insights filed under this research question yet.</p>}
+      {group.entries.map((e) => (
+        <InsightCard
+          key={e.connection_id}
+          entry={e}
+          families={group.families}
+          activeFamilyId={activeFamilyId}
+          onToggleFamily={onToggleFamily}
+          onChanged={() => onChanged()}
+        />
+      ))}
+      <StarredNotCited group={group} />
+    </>
+  );
+}
+
+function FamiliesPanel({
+  group,
+  activeFamilyId,
+  onToggleFamily,
+  onChanged,
+}: {
+  group: OrganizeGroup;
+  activeFamilyId: number | null;
+  onToggleFamily: (id: number) => void;
+  onChanged: () => void;
+}) {
+  const [selected, setSelected] = useState<number[]>([]);
+  const [merging, setMerging] = useState(false);
+  const unassigned = group.entries.filter((e) => e.family_ids.length === 0);
+  const liveSelected = selected.filter((id) => group.families.some((f) => f.id === id));
+  const { cap } = group;
+
+  return (
+    <>
+      <div className="organize-sidebar-header">
+        <h2>Code families</h2>
+        <span className={"focus-count" + (cap.at_cap ? " off-range" : "")}>
+          {cap.live_count}/{cap.max_per_rq}
+        </span>
+      </div>
+      {cap.at_cap && (
+        <p className="warning-text">At the {cap.max_per_rq}-family cap. Merge or dismiss a family to make room.</p>
+      )}
+      {!cap.at_cap && cap.near_cap && <p className="warning-text">Near the {cap.max_per_rq}-family cap.</p>}
+      {group.families.length === 0 && <p className="meta">No code families yet.</p>}
+      {group.families.map((f) => (
+        <CodeFamilyCard
+          key={f.id}
+          family={f}
+          onChanged={onChanged}
+          addableEntries={unassigned}
+          selected={liveSelected.includes(f.id)}
+          onSelect={() => setSelected(toggleId(liveSelected, f.id))}
+          active={f.id === activeFamilyId}
+          onToggleActive={() => onToggleFamily(f.id)}
+        />
+      ))}
+      <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.6rem", flexWrap: "wrap" }}>
+        <NewFamilyForm group={group} onDone={onChanged} />
+        {group.families.length > 1 && (
+          <button className="secondary" onClick={() => setMerging(true)} disabled={liveSelected.length < 2}>
+            Merge selected{liveSelected.length > 0 ? ` (${liveSelected.length})` : ""}
+          </button>
+        )}
+      </div>
+      {merging && (
+        <MergeFamiliesModal
+          group={group}
+          familyIds={liveSelected}
+          onClose={() => setMerging(false)}
+          onDone={() => {
+            setSelected([]);
+            onChanged();
+          }}
+        />
+      )}
+    </>
+  );
+}
+
 export default function OrganizePage() {
   const [data, setData] = useState<OrganizeResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [activeFamilyId, setActiveFamilyId] = useState<number | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const load = useCallback(() => {
     api
@@ -382,66 +596,60 @@ export default function OrganizePage() {
     setNotice(message ?? null);
     load();
   };
-  const { error: focusError, run: runFocus } = useAction(load);
 
   if (!data) return <p style={{ padding: "2rem" }}>{loadError ? <span className="error-text">{loadError}</span> : "Loading…"}</p>;
 
-  const all = [...data.focused, ...data.other].sort(
-    (a, b) => a.rq.display_order - b.rq.display_order || a.rq.id - b.rq.id
-  );
-  const allRqs = all.map((g) => g.rq);
-  const [low, high] = data.focus_range;
-  const inRange = data.focus_count >= low && data.focus_count <= high;
+  const groups = [...data.focused, ...data.other];
+  const allRqs = [...groups]
+    .sort((a, b) => a.rq.display_order - b.rq.display_order || a.rq.id - b.rq.id)
+    .map((g) => g.rq);
+  const requestedId = Number(searchParams.get("rq"));
+  // A requested RQ that was merged away is no longer a group, so this falls back to the default.
+  const selected = groups.find((g) => g.rq.id === requestedId) ?? groups[0];
+  const activeFamily = selected?.families.some((f) => f.id === activeFamilyId) ? activeFamilyId : null;
+  const toggleFamily = (id: number) => setActiveFamilyId(activeFamily === id ? null : id);
+  const select = (id: number) => {
+    setActiveFamilyId(null);
+    setSearchParams({ rq: String(id) });
+  };
 
   return (
     <div className="organize-page">
-      <h1>Organize</h1>
-      {loadError && <p className="error-text">{loadError}</p>}
-      {notice && (
-        <p className="notice">
-          {notice}{" "}
-          <button className="link-button" onClick={() => setNotice(null)}>
-            dismiss
-          </button>
-        </p>
-      )}
-
-      <div className="focus-bar">
-        {all.map((g) => (
-          <button
-            key={g.rq.id}
-            className={"chip" + (g.rq.focused ? " on" : "")}
-            onClick={() => runFocus(() => api.setResearchQuestionFocus(g.rq.id, !g.rq.focused))}
-            title={g.rq.focused ? "Unfocus" : "Focus"}
-          >
-            {g.rq.name}
-          </button>
-        ))}
-        <span className={"focus-count" + (inRange ? "" : " off-range")}>
-          {data.focus_count} of {low}-{high} focused
-        </span>
-        {focusError && <p className="error-text">{focusError}</p>}
-      </div>
-
-      {data.focused.length === 0 && (
-        <p className="meta">Click research questions above to focus the {low}-{high} you'll build the codebook from.</p>
-      )}
-      {data.focused.map((g) => (
-        <FocusedRQCard key={g.rq.id} group={g} allRqs={allRqs} onChanged={changed} />
-      ))}
-
-      {data.other.length > 0 && (
-        <details className="memo-section">
-          <summary>
-            <h2 style={{ display: "inline" }}>Other RQs ({data.other.length})</h2>
-          </summary>
-          {data.other.map((g) => (
-            <OtherRQRow key={g.rq.id} group={g} allRqs={allRqs} onChanged={changed} />
-          ))}
-        </details>
-      )}
-
-      <CodebookFooter />
+      <RQSidebar data={data} selectedId={selected?.rq.id} onSelect={select} onChanged={load} />
+      <main className="organize-col organize-main">
+        {loadError && <p className="error-text">{loadError}</p>}
+        {notice && (
+          <p className="notice">
+            {notice}{" "}
+            <button className="link-button" onClick={() => setNotice(null)}>
+              dismiss
+            </button>
+          </p>
+        )}
+        {selected ? (
+          <RQDetail
+            key={selected.rq.id}
+            group={selected}
+            allRqs={allRqs}
+            activeFamilyId={activeFamily}
+            onToggleFamily={toggleFamily}
+            onChanged={changed}
+          />
+        ) : (
+          <p className="meta">No research questions yet.</p>
+        )}
+      </main>
+      <aside className="organize-col organize-families">
+        {selected && (
+          <FamiliesPanel
+            key={selected.rq.id}
+            group={selected}
+            activeFamilyId={activeFamily}
+            onToggleFamily={toggleFamily}
+            onChanged={() => changed()}
+          />
+        )}
+      </aside>
     </div>
   );
 }

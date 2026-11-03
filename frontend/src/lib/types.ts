@@ -255,7 +255,9 @@ export interface OrganizeEntry {
   research_question_id: number;
   conversation_id: number | null;
   conversation_title: string | null;
+  voice_memo_id: number;
   family_ids: number[];
+  evidence: ConnectionEvidence[];
 }
 
 export interface OrganizeGroup {
@@ -265,6 +267,7 @@ export interface OrganizeGroup {
   entries: OrganizeEntry[];
   families: CodeFamily[];
   cap: CodeFamilyCap;
+  starred_unassigned: MemoStarredUnassignedGroup[];
 }
 
 export interface OrganizeResponse {

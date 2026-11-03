@@ -23,7 +23,9 @@ matching type in the same PR, because nothing checks them against each other.
   `RQMerge.status` is `"active" | "undone"`, mirroring `rl_rq_merge.status`.
 - `CodeFamily` carries `starred`. `CodeFamilyCap` is the `cap` dict shared by
   `CodeFamilyState`, `OrganizeGroup` and the create-family response.
-- `OrganizeResponse` (with `OrganizeGroup` and `OrganizeEntry`) mirrors `GET /organize`, and
+- `OrganizeResponse` (with `OrganizeGroup` and `OrganizeEntry`) mirrors `GET /organize`;
+  entry `evidence` reuses `ConnectionEvidence` and group `starred_unassigned` reuses
+  `MemoStarredUnassignedGroup`, because the backend builds both with the `GET /memo` helpers.
   `CodebookPrep` mirrors `GET /codebook_prep`. `MemoSection` carries `merged_from`.
 
 ## Routes (`frontend/src/App.tsx`)
@@ -32,7 +34,7 @@ matching type in the same PR, because nothing checks them against each other.
 |---|---|---|
 | `/` | `ReaderPage` | `?conversation=N` picks the transcript, and `&snippet=ID` scrolls to and outlines a snippet. `MAX_VOICE_MEMO_SECONDS = 1200` must match `voice_memo.max_duration_seconds` in `backend/config.yaml`. |
 | `/memo` | `MemoPage` | Memo entries, next steps, code families and merge suggestions |
-| `/organize` | `OrganizePage` | Focus bar (`focus_range` from the backend; the counter turns amber outside it), one card per focused RQ (RQ merge and undo, code families with star, rename, member edit, new family, merge selected), collapsed "Other RQs", and "Prepare codebook", which downloads `codebook-prep-<YYYY-MM-DD>.json` in the browser. It never calls synthesis. |
+| `/organize` | `OrganizePage` | Three columns that scroll independently (stacked below 1000px). The left sidebar lists RQs with a focus toggle (●/○) and entry count, focused ones first, then "Other", with the "N of 5-7 focused" counter (`focus_range`; amber outside it) and "Prepare codebook" at the bottom, which downloads `codebook-prep-<YYYY-MM-DD>.json` in the browser. Clicking an RQ selects it; the selection lives in `?rq=<id>` and falls back to the first focused RQ (else the first other) when missing or merged away. The middle column shows the selected RQ (merge into, undo of merged sources), each filed insight with its quoted evidence, family tags and "+ add to family", then "Starred, not yet cited". The right column holds the RQ's code families (`CodeFamilyCard`: star, rename, members, add entries, accept, dismiss, merge checkbox), the cap, "New family" and "Merge selected"; clicking a family's name highlights its insights in the middle column. It never calls synthesis. |
 | `/settings` | `SettingsPage` | View, edit, save and reset the review prompt |
 
 ## Components (`frontend/src/components/`)
@@ -46,8 +48,10 @@ matching type in the same PR, because nothing checks them against each other.
 - `ReflectionPanel`: recording, upload, and polling transcription every 700 ms.
 - `ReviewStep`: accept, edit or reject proposals, assign starred highlights, and file.
 - `CodeFamilyCard`: `CodeFamilyCard` (star, rename and redefine, accept, dismiss; with
-  `addableEntries` it also shows removable member chips and an "Add entries" picker, and with
-  `onSelect` a merge checkbox), `MergeSuggestionCard`, and `EntryPicker`. Used by `MemoPage`
+  `addableEntries` it also shows removable member chips and an "Add entries" picker, with
+  `onSelect` a merge checkbox, and with `onToggleActive` the name becomes a toggle that sets
+  `active`), `MergeSuggestionCard`, and `EntryPicker`. Every prop past `family` and `onChanged`
+  is optional, so `MemoPage` uses the plain card. Used by `MemoPage`
   and `OrganizePage`.
 
 ## Behaviour to keep
