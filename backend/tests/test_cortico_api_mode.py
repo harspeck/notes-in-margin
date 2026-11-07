@@ -76,8 +76,12 @@ class FakeCortico:
                 "page_info": {"count": len(ids), "cursor": cursor, "total": 3},
             })
         if path == "/v2/conversations":
+            # Like real Cortico: the last page still carries a cursor (the last id), and
+            # this route rejects that cursor.
+            if "cursor" in q:
+                return httpx.Response(400, json={"detail": {"message": f'Invalid GUID "{q["cursor"]}"'}})
             conv = {"501": 7001, "502": 7002}[q["project_id"]]
-            return httpx.Response(200, json={"conversations": [self._conv(conv)], "page_info": {"count": 1, "cursor": None, "total": 1}})
+            return httpx.Response(200, json={"conversations": [self._conv(conv)], "page_info": {"count": 1, "cursor": conv, "total": 1}})
         if path.startswith("/v2/conversations/"):
             parts = path.split("/")
             cid = int(parts[3])

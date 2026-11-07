@@ -130,14 +130,21 @@ class CorticoClient:
         return self.request("GET", path, params=params)
 
     def paginate(self, path: str, list_key: str, *, page_size: int = 100, **params: Any) -> Iterator[dict]:
+        """Follows page_info.cursor until page_info.total rows have arrived. Cortico sets a
+        cursor on the last page too (the last row's id), and /v2/conversations rejects that
+        cursor ("Invalid GUID"), so `total`, not a null cursor, is what ends the loop."""
         cursor_param = "after" if path.startswith(AFTER_CURSOR_ROUTES) else "cursor"
         cursor = None
+        seen = 0
         for _ in range(MAX_PAGES):
             page = self.get(path, count=page_size, **{cursor_param: cursor}, **params)
             rows = (page or {}).get(list_key) or []
             yield from rows
-            cursor = ((page or {}).get("page_info") or {}).get("cursor")
-            if cursor is None or not rows:
+            seen += len(rows)
+            info = (page or {}).get("page_info") or {}
+            cursor = info.get("cursor")
+            total = info.get("total")
+            if cursor is None or not rows or (total is not None and seen >= total):
                 return
         raise CorticoUnavailable(f"Stopped paging {path} after {MAX_PAGES} pages.")
 
@@ -170,7 +177,9 @@ class CorticoClient:
         return list(self.paginate("/v2/projects", "projects", **params))
 
     def conversations(self, project_id: int) -> list[dict]:
-        return list(self.paginate("/v2/conversations", "conversations", project_id=project_id))
+        # Large pages ordered by id, as llm-auto-highlighter does: one request for almost
+        # every project, so the cursor is rarely needed.
+        return list(self.paginate("/v2/conversations", "conversations", page_size=1000, project_id=project_id, order_by="id"))
 
     def conversation(self, conversation_id: int) -> dict:
         return self.get(f"/v2/conversations/{conversation_id}")
