@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from ..auth import get_source
+from ..auth import CurrentUser, current_user, get_source
 from ..config import get_config
 from ..cortico.source import CorticoSource
 from ..db import get_prototype_db
@@ -18,6 +18,7 @@ from ..models_prototype import (
     RLHighlight,
     VoiceMemo,
 )
+from ..ownership import owned_voice_memo, owns_rq
 from ..schemas import FileToMemoRequest
 from ..services import ai_review
 
@@ -99,10 +100,9 @@ def run_review(
     voice_memo_id: int,
     cortico_db: CorticoSource = Depends(get_source),
     prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
-    vm = prototype_db.get(VoiceMemo, voice_memo_id)
-    if vm is None:
-        raise HTTPException(404, "voice memo not found")
+    vm = owned_voice_memo(prototype_db, voice_memo_id, user)
     connections = ai_review.generate_connections(
         prototype_db=prototype_db, cortico_db=cortico_db, voice_memo=vm, config=config
     )
@@ -123,10 +123,9 @@ def get_review(
     voice_memo_id: int,
     cortico_db: CorticoSource = Depends(get_source),
     prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
-    vm = prototype_db.get(VoiceMemo, voice_memo_id)
-    if vm is None:
-        raise HTTPException(404, "voice memo not found")
+    vm = owned_voice_memo(prototype_db, voice_memo_id, user)
     connections = (
         prototype_db.query(ReflectionConnection)
         .filter(ReflectionConnection.voice_memo_id == voice_memo_id)
@@ -151,13 +150,16 @@ def file_to_memo(
     body: FileToMemoRequest,
     cortico_db: CorticoSource = Depends(get_source),
     prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
     """The single write point for the memo. Nothing reaches status accepted/edited before
     this call; rejected proposals stay in the log with status='rejected' rather than being
     deleted, so the review stays auditable."""
-    vm = prototype_db.get(VoiceMemo, voice_memo_id)
-    if vm is None:
-        raise HTTPException(404, "voice memo not found")
+    vm = owned_voice_memo(prototype_db, voice_memo_id, user)
+    for decision in body.decisions:
+        rq_id = decision.research_question_id
+        if rq_id is not None and not owns_rq(prototype_db, rq_id, user):
+            raise HTTPException(400, f"research question {rq_id} not found")
 
     now = datetime.now(timezone.utc)
     spans = highlight_spans(prototype_db, vm.user_id, vm.conversation_id)

@@ -7,6 +7,7 @@ from ..auth import CurrentUser, active_workspace, current_user, workspace_projec
 from ..config import get_config
 from ..db import get_prototype_db
 from ..models_prototype import ResearchQuestion, RQFocus, RQMerge
+from ..ownership import owned_rq, owned_rq_merge, owns_rq
 from ..schemas import (
     FocusRequest,
     ReorderRequest,
@@ -75,13 +76,6 @@ def _serialize_merge(m: RQMerge) -> dict:
     }
 
 
-def _get_rq(prototype_db: Session, rq_id: int) -> ResearchQuestion:
-    rq = prototype_db.get(ResearchQuestion, rq_id)
-    if rq is None:
-        raise HTTPException(404, "research question not found")
-    return rq
-
-
 @router.get("")
 def list_research_questions(
     include_archived: bool = False, prototype_db: Session = Depends(get_prototype_db),
@@ -123,11 +117,10 @@ def create_research_question(
 
 @router.patch("/{rq_id}")
 def update_research_question(
-    rq_id: int, body: ResearchQuestionUpdate, prototype_db: Session = Depends(get_prototype_db)
+    rq_id: int, body: ResearchQuestionUpdate, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
-    rq = prototype_db.get(ResearchQuestion, rq_id)
-    if rq is None:
-        raise HTTPException(404, "research question not found")
+    rq = owned_rq(prototype_db, rq_id, user)
     if body.name is not None:
         rq.name = body.name
     if body.description is not None:
@@ -143,19 +136,19 @@ def update_research_question(
 
 @router.put("/reorder")
 def reorder_research_questions(
-    body: ReorderRequest, prototype_db: Session = Depends(get_prototype_db)
+    body: ReorderRequest, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
     for order, rq_id in enumerate(body.ordered_ids):
-        rq = prototype_db.get(ResearchQuestion, rq_id)
-        if rq is not None:
-            rq.display_order = order
+        if owns_rq(prototype_db, rq_id, user):
+            prototype_db.get(ResearchQuestion, rq_id).display_order = order
     prototype_db.commit()
     return {"reordered": True}
 
 
 @router.post("/{rq_id}/focus")
 def set_focus(rq_id: int, body: FocusRequest, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)):
-    rq = _get_rq(prototype_db, rq_id)
+    rq = owned_rq(prototype_db, rq_id, user)
     if rq.id in active_merge_edges(prototype_db):
         raise HTTPException(409, "this research question is merged into another; focus its target instead")
     focus = prototype_db.get(RQFocus, rq.id)
@@ -169,8 +162,8 @@ def set_focus(rq_id: int, body: FocusRequest, prototype_db: Session = Depends(ge
 
 @router.post("/{rq_id}/merge_into")
 def merge_into(rq_id: int, body: RQMergeRequest, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)):
-    source = _get_rq(prototype_db, rq_id)
-    target = _get_rq(prototype_db, body.target_id)
+    source = owned_rq(prototype_db, rq_id, user)
+    target = owned_rq(prototype_db, body.target_id, user)
     try:
         merge = merge_rq(prototype_db, user_id=user.id, source=source, target=target)
     except ValueError as e:
@@ -185,10 +178,10 @@ def merge_into(rq_id: int, body: RQMergeRequest, prototype_db: Session = Depends
 
 
 @rq_merges_router.post("/{merge_id}/undo")
-def undo(merge_id: int, prototype_db: Session = Depends(get_prototype_db)):
-    merge = prototype_db.get(RQMerge, merge_id)
-    if merge is None:
-        raise HTTPException(404, "research question merge not found")
+def undo(
+    merge_id: int, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)
+):
+    merge = owned_rq_merge(prototype_db, merge_id, user)
     try:
         kept = undo_merge(prototype_db, merge)
     except ValueError as e:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ..auth import CurrentUser, current_user, get_source
@@ -10,6 +10,7 @@ from ..config import get_config
 from ..cortico.source import CorticoSource, as_source
 from ..db import get_prototype_db
 from ..models_prototype import NextStepSuggestion
+from ..ownership import owned_next_step
 from ..services.next_steps import generate_next_step_suggestions
 
 router = APIRouter(prefix="/next_steps", tags=["next_steps"])
@@ -67,20 +68,20 @@ def list_suggestions(
 
 
 @router.post("/{suggestion_id}/accept")
-def accept(suggestion_id: int, prototype_db: Session = Depends(get_prototype_db)):
-    s = prototype_db.get(NextStepSuggestion, suggestion_id)
-    if s is None:
-        raise HTTPException(404, "suggestion not found")
+def accept(
+    suggestion_id: int, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)
+):
+    s = owned_next_step(prototype_db, suggestion_id, user)
     s.status = "accepted"
     prototype_db.commit()
     return {"id": s.id, "status": s.status}
 
 
 @router.post("/{suggestion_id}/dismiss")
-def dismiss(suggestion_id: int, prototype_db: Session = Depends(get_prototype_db)):
-    s = prototype_db.get(NextStepSuggestion, suggestion_id)
-    if s is None:
-        raise HTTPException(404, "suggestion not found")
+def dismiss(
+    suggestion_id: int, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)
+):
+    s = owned_next_step(prototype_db, suggestion_id, user)
     s.status = "dismissed"
     prototype_db.commit()
     return {"id": s.id, "status": s.status}

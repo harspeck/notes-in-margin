@@ -11,6 +11,7 @@ from ..auth import CurrentUser, current_user
 from ..config import get_config
 from ..db import PrototypeSession, get_prototype_db
 from ..models_prototype import VoiceMemo
+from ..ownership import owned_voice_memo
 from ..schemas import VoiceMemoEdit
 from ..services.transcription import ENGINE_LABEL, transcribe
 
@@ -101,20 +102,19 @@ async def create_voice_memo(
 
 
 @router.get("/voice_memos/{voice_memo_id}")
-def get_voice_memo(voice_memo_id: int, prototype_db: Session = Depends(get_prototype_db)):
-    vm = prototype_db.get(VoiceMemo, voice_memo_id)
-    if vm is None:
-        raise HTTPException(404, "voice memo not found")
+def get_voice_memo(
+    voice_memo_id: int, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)
+):
+    vm = owned_voice_memo(prototype_db, voice_memo_id, user)
     return _serialize(vm)
 
 
 @router.patch("/voice_memos/{voice_memo_id}")
 def edit_voice_memo(
-    voice_memo_id: int, body: VoiceMemoEdit, prototype_db: Session = Depends(get_prototype_db)
+    voice_memo_id: int, body: VoiceMemoEdit, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
-    vm = prototype_db.get(VoiceMemo, voice_memo_id)
-    if vm is None:
-        raise HTTPException(404, "voice memo not found")
+    vm = owned_voice_memo(prototype_db, voice_memo_id, user)
     vm.transcription_edited = body.transcription_edited
     prototype_db.commit()
     prototype_db.refresh(vm)

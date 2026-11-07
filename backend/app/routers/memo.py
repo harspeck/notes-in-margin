@@ -18,6 +18,7 @@ from ..models_prototype import (
     RLHighlight,
     VoiceMemo,
 )
+from ..ownership import owned_connection
 from ..schemas import MemoEntryUpdate, MemoReorderRequest
 from ..services.rq_merges import active_merge_edges, resolve_rq_id, rq_group_ids
 
@@ -207,9 +208,10 @@ def get_memo(
 
 @router.patch("/connections/{connection_id}")
 def edit_memo_entry(
-    connection_id: int, body: MemoEntryUpdate, prototype_db: Session = Depends(get_prototype_db)
+    connection_id: int, body: MemoEntryUpdate, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
-    connection = prototype_db.get(ReflectionConnection, connection_id)
+    connection = owned_connection(prototype_db, connection_id, user)
     if connection is None or connection.status not in FILED_STATUSES:
         raise HTTPException(404, "filed memo entry not found")
 
@@ -250,8 +252,10 @@ def edit_memo_entry(
 
 
 @router.post("/connections/{connection_id}/retract")
-def retract_memo_entry(connection_id: int, prototype_db: Session = Depends(get_prototype_db)):
-    connection = prototype_db.get(ReflectionConnection, connection_id)
+def retract_memo_entry(
+    connection_id: int, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)
+):
+    connection = owned_connection(prototype_db, connection_id, user)
     if connection is None or connection.status not in FILED_STATUSES:
         raise HTTPException(404, "filed memo entry not found")
     connection.status = "retracted"
@@ -260,10 +264,13 @@ def retract_memo_entry(connection_id: int, prototype_db: Session = Depends(get_p
 
 
 @router.put("/reorder")
-def reorder_memo_entries(body: MemoReorderRequest, prototype_db: Session = Depends(get_prototype_db)):
+def reorder_memo_entries(
+    body: MemoReorderRequest, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
+):
     group = set(rq_group_ids(prototype_db, body.research_question_id))
     for order, connection_id in enumerate(body.ordered_connection_ids):
-        c = prototype_db.get(ReflectionConnection, connection_id)
+        c = owned_connection(prototype_db, connection_id, user)
         if c is not None and c.research_question_id in group:
             c.memo_order = order
     prototype_db.commit()

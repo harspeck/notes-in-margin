@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from openai import OpenAI
 from sqlalchemy.orm import Session
 
-from ..config import Config
+from ..config import Config, get_config
 from ..evidence_provenance import highlight_spans, resolve_evidence
 from ..cortico.source import as_source
 from ..models_prototype import (
@@ -55,23 +55,33 @@ can't locate a specific span.
 REVIEW_PROMPT_SETTING_KEY = "review_prompt"
 
 
-def get_review_prompt(prototype_db: Session) -> str:
-    row = prototype_db.get(AppSetting, REVIEW_PROMPT_SETTING_KEY)
+def _review_prompt_key(user_id: int) -> str:
+    return f"{REVIEW_PROMPT_SETTING_KEY}:{user_id}"
+
+
+def get_review_prompt(prototype_db: Session, user_id: int) -> str:
+    """The user's own prompt, else the default. The pre-multi-user global prompt belonged to
+    the single snapshot-mode user, so only that user falls back to it."""
+    row = prototype_db.get(AppSetting, _review_prompt_key(user_id))
+    if row is None and user_id == get_config().default_user_id:
+        row = prototype_db.get(AppSetting, REVIEW_PROMPT_SETTING_KEY)
     return row.value if row else DEFAULT_REVIEW_PROMPT
 
 
-def set_review_prompt(prototype_db: Session, text: str) -> None:
-    row = prototype_db.get(AppSetting, REVIEW_PROMPT_SETTING_KEY)
+def set_review_prompt(prototype_db: Session, text: str, user_id: int) -> None:
+    key = _review_prompt_key(user_id)
+    row = prototype_db.get(AppSetting, key)
     if row:
         row.value = text
     else:
-        row = AppSetting(key=REVIEW_PROMPT_SETTING_KEY, value=text)
+        row = AppSetting(key=key, value=text)
         prototype_db.add(row)
     prototype_db.commit()
 
 
-def reset_review_prompt(prototype_db: Session) -> str:
-    set_review_prompt(prototype_db, DEFAULT_REVIEW_PROMPT)
+def reset_review_prompt(prototype_db: Session, user_id: int) -> str:
+    # Written, not deleted, so a reset user doesn't fall back to the global prompt.
+    set_review_prompt(prototype_db, DEFAULT_REVIEW_PROMPT, user_id)
     return DEFAULT_REVIEW_PROMPT
 
 
@@ -200,7 +210,7 @@ def generate_connections(
         .order_by(ResearchQuestion.display_order)
         .all()
     )
-    prompt = get_review_prompt(prototype_db)
+    prompt = get_review_prompt(prototype_db, voice_memo.user_id)
 
     reflection_word_count = len(json.loads(voice_memo.transcription_raw)) if voice_memo.transcription_raw else 0
 
