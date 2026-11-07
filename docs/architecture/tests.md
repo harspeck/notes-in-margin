@@ -1,6 +1,6 @@
 # Tests
 
-Run them with `cd backend && .venv/bin/python -m pytest -q` (78 tests, about 1.7 s). They
+Run them with `cd backend && .venv/bin/python -m pytest -q` (80 tests, about 1.3 s). They
 need no network, API key or running server.
 
 ## Environment (`backend/tests/conftest.py`)
@@ -9,11 +9,20 @@ need no network, API key or running server.
   `app` (with `os.environ.setdefault`), and runs `create_all` once per session. Never export
   `PROTOTYPE_DB_PATH` to the real `db/prototype.db`, because the tests would then write into
   it.
-- **Snapshot:** tests use the real Cortico snapshot, not a copy. `acp_pipeline_snapshot.db`
-  must be at the repo root (symlink it into a worktree). Tests assert on its data:
+- **Snapshot:** tests use the real Cortico snapshot when `acp_pipeline_snapshot.db` is at
+  the repo root (symlink it into a worktree), or whatever `CORTICO_DB_PATH` names (an
+  absolute path). Otherwise conftest builds a synthetic stand-in with
+  `fixtures/build_snapshot_fixture.py` into a temp file and sets `CORTICO_DB_PATH` before
+  importing `app`. The builder executes `db/schema.sql` into that new file only, refuses
+  to overwrite an existing file, and is deterministic. Its text is invented, every
+  `cortico_id` is the local id plus 100000, and it mirrors the quirks the code depends on
+  (no `conversation_guide_id` or `audio_url` set, conversations 160, 162 and 201 with no
+  snippets, guide `order_index` restarting per section). A new test that asserts on other
+  real data must add that data to the builder. Tests assert on:
   - 201 conversations
-  - conversations 1, 9 and 10
-  - snippets 1936 and 1938
+  - conversations 1, 9 and 10 (1 in project 1, which has no guide; 9 and 10 in project 5)
+  - conversations 12 to 16, each with at least three snippets of 20 or more words
+  - snippets 1936 and 1938 (in conversation 9)
   - guide question 4
   - the guide codes "Consent", "Guidelines" and "Q1 Intros"
 - **No lifespan:** routers are exercised with `TestClient(app)` outside a `with` block, so

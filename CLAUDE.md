@@ -40,16 +40,16 @@ Every command below was run and worked on 2026-10-26.
 | Setup (frontend) | `cd frontend && npm install` |
 | Run backend | `cd backend && .venv/bin/uvicorn app.main:app --port 8000` (no `--reload`; `GET /health` → `{"ok":true}`) |
 | Run frontend | `cd frontend && npm run dev`, then open http://localhost:5173 |
-| Test | `cd backend && .venv/bin/python -m pytest -q` (78 tests, about 1.7 s) |
+| Test | `cd backend && .venv/bin/python -m pytest -q` (80 tests, about 1.3 s) |
 | Lint | `cd frontend && npm run lint` (oxlint; exits 0 with 10 existing warnings) |
 | Typecheck | `cd frontend && npx tsc -b --noEmit` |
 | Build | `cd frontend && npm run build` |
 | Back up | `cd backend && .venv/bin/python scripts/export_md.py` (Markdown export plus a SQLite copy into `db/local/`; `--no-db-backup`, `--out-dir DIR`) |
 
 - **Ports are fixed:** the backend must be on 8000 and the frontend on 5173, because `frontend/src/lib/api.ts` hard-codes `BASE = "http://localhost:8000"`, there is no Vite proxy, and CORS in `backend/app/main.py` allows only `http://localhost:5173`.
-- **What tests need:** no network, no API key (they pass with a fake `OPENAI_API_KEY` and network blocked) and no running server. They do need `acp_pipeline_snapshot.db` at the repo root, because they assert on its real data.
+- **What tests need:** no network, no API key (they pass with a fake `OPENAI_API_KEY` and network blocked) and no running server. They use `acp_pipeline_snapshot.db` at the repo root when it is there. Without it (and with `CORTICO_DB_PATH` unset), `tests/conftest.py` builds a synthetic stand-in with `tests/fixtures/build_snapshot_fixture.py` into a temp file and points `CORTICO_DB_PATH` at it. The fixture reproduces only the snapshot facts the tests assert on, so a new test that asserts on other real data must add them to the builder.
 - **The tests' prototype database:** `tests/conftest.py` points `PROTOTYPE_DB_PATH` at a temp file before importing the app, using `setdefault`. Never export `PROTOTYPE_DB_PATH` in your shell to the real dev database, because the tests would then write test rows into it.
-- **In a git worktree:** the snapshot, `backend/.venv` and `frontend/node_modules` are gitignored and missing. Symlink the main checkout's `acp_pipeline_snapshot.db` and `frontend/node_modules` into the worktree, and run the main checkout's `backend/.venv/bin/python`.
+- **In a git worktree:** the snapshot, `backend/.venv` and `frontend/node_modules` are gitignored and missing. Symlink the main checkout's `acp_pipeline_snapshot.db` (if you have it; the tests fall back to the fixture otherwise) and `frontend/node_modules` into the worktree, and run the main checkout's `backend/.venv/bin/python`.
 - **To smoke-test the server without touching dev data:** set `PROTOTYPE_DB_PATH=<scratch file>`, because startup runs `create_all` and seeds RQs into whichever database it is pointed at.
 - **Gaps:** there is no backend lint or typecheck and no frontend tests.
 - **First transcription** downloads the faster-whisper `small.en` model (about 500 MB). It needs network once and runs locally after that.
@@ -77,7 +77,7 @@ can break.
 
 **Databases** (`backend/app/db.py`, `models_cortico.py`, `models_prototype.py`)
 - Never `add()` or `commit()` through a Cortico session or model, because the snapshot is read-only by design and the engine refuses writes.
-- Every new prototype table must have a name that doesn't collide with `db/schema.sql`, because both databases share one naming world (`highlight` had to become `rl_highlight`). `db/schema.sql` is the snapshot's schema, for reference only; never execute it.
+- Every new prototype table must have a name that doesn't collide with `db/schema.sql`, because both databases share one naming world (`highlight` had to become `rl_highlight`). `db/schema.sql` is the snapshot's schema, for reference only; never execute it, except into a new scratch file as the test fixture builder does.
 - Rejected, dismissed, merged and retracted rows are status changes, never deletes, because the review trail must stay auditable.
 
 **Evidence provenance** (`backend/app/evidence_provenance.py`)

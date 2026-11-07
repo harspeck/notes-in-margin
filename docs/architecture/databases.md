@@ -17,7 +17,8 @@ corrected in `docs/prototype-log.md`.
 Organization, Community, Forum, Project, Participant, Conversation, Snippet,
 ConversationGuide, GuideSection and GuideQuestion. `db/schema.sql` is this snapshot's schema,
 generated with `sqlite3 acp_pipeline_snapshot.db ".schema"`. It is a reference for checking
-names and is never executed.
+names and is never executed, except into a new scratch file by the test fixture builder
+(`backend/tests/fixtures/build_snapshot_fixture.py`).
 
 Snapshot facts the code depends on (`docs/prototype-log.md`):
 - Only 1 of the 54 projects (project 5) has a conversation guide.
