@@ -177,9 +177,10 @@ class CorticoClient:
         return list(self.paginate("/v2/projects", "projects", **params))
 
     def conversations(self, project_id: int) -> list[dict]:
-        # Large pages ordered by id, as llm-auto-highlighter does: one request for almost
-        # every project, so the cursor is rarely needed.
-        return list(self.paginate("/v2/conversations", "conversations", page_size=1000, project_id=project_id, order_by="id"))
+        # One large page ordered by id, as llm-auto-highlighter does (count=5000). Following
+        # this route's cursor is unverified: live, the first 100-row page's cursor was
+        # rejected ("Invalid GUID"), so the page size has to cover the whole project.
+        return list(self.paginate("/v2/conversations", "conversations", page_size=5000, project_id=project_id, order_by="id"))
 
     def conversation(self, conversation_id: int) -> dict:
         return self.get(f"/v2/conversations/{conversation_id}")
