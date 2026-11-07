@@ -6,8 +6,10 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from ..auth import get_source
 from ..config import get_config
-from ..db import get_cortico_db, get_prototype_db
+from ..cortico.source import CorticoSource
+from ..db import get_prototype_db
 from ..evidence_provenance import assigned_highlight_ids, evidence_row, highlight_spans
 from ..evidence_text import quoted_texts
 from ..models_prototype import (
@@ -95,7 +97,7 @@ def _starred_unassigned(
 @router.post("/voice_memos/{voice_memo_id}/review")
 def run_review(
     voice_memo_id: int,
-    cortico_db: Session = Depends(get_cortico_db),
+    cortico_db: CorticoSource = Depends(get_source),
     prototype_db: Session = Depends(get_prototype_db),
 ):
     vm = prototype_db.get(VoiceMemo, voice_memo_id)
@@ -119,7 +121,7 @@ def run_review(
 @router.get("/voice_memos/{voice_memo_id}/review")
 def get_review(
     voice_memo_id: int,
-    cortico_db: Session = Depends(get_cortico_db),
+    cortico_db: CorticoSource = Depends(get_source),
     prototype_db: Session = Depends(get_prototype_db),
 ):
     vm = prototype_db.get(VoiceMemo, voice_memo_id)
@@ -147,7 +149,7 @@ def get_review(
 def file_to_memo(
     voice_memo_id: int,
     body: FileToMemoRequest,
-    cortico_db: Session = Depends(get_cortico_db),
+    cortico_db: CorticoSource = Depends(get_source),
     prototype_db: Session = Depends(get_prototype_db),
 ):
     """The single write point for the memo. Nothing reaches status accepted/edited before

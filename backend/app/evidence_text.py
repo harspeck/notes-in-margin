@@ -3,11 +3,9 @@ review and memo screens can show what the passage actually says instead of a bar
 snippet id. Read-only against the Cortico snippets — see docs/prototype-log.md."""
 from __future__ import annotations
 
-import json
-
 from sqlalchemy.orm import Session
 
-from .models_cortico import Snippet
+from .cortico.source import as_source
 
 
 def quoted_texts(
@@ -18,7 +16,7 @@ def quoted_texts(
     snippet_ids = {sid for sid, _, _ in spans}
     if not snippet_ids:
         return {}
-    snippets = {s.id: s for s in cortico_db.query(Snippet).filter(Snippet.id.in_(snippet_ids))}
+    snippets = as_source(cortico_db).snippets_by_ids(snippet_ids)
 
     out: dict[tuple[int, int, int], str] = {}
     for sid, start, end in spans:
@@ -26,6 +24,5 @@ def quoted_texts(
         if snippet is None or not snippet.words:
             out[(sid, start, end)] = ""
             continue
-        words = json.loads(snippet.words)
-        out[(sid, start, end)] = " ".join(w["word"] for w in words[start:end])
+        out[(sid, start, end)] = " ".join(w["word"] for w in snippet.words[start:end])
     return out

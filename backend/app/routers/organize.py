@@ -5,10 +5,11 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from ..auth import CurrentUser, current_user, get_source
 from ..config import get_config
-from ..db import get_cortico_db, get_prototype_db
+from ..cortico.source import CorticoSource, as_source
+from ..db import get_prototype_db
 from ..evidence_text import quoted_texts
-from ..models_cortico import Conversation
 from ..models_prototype import CodeFamily, ReflectionConnection, ResearchQuestion, VoiceMemo
 from ..services.code_families import FILED_STATUSES, starred_family_ids
 from ..services.rq_merges import active_merge_edges, rq_group_ids
@@ -22,12 +23,12 @@ config = get_config()
 FOCUS_RANGE = (5, 7)
 
 
-def _target_rqs(prototype_db: Session, edges: dict[int, int]) -> list[ResearchQuestion]:
+def _target_rqs(prototype_db: Session, edges: dict[int, int], user_id: int) -> list[ResearchQuestion]:
     """The user's unarchived RQs that aren't merged into another; merged RQs are archived
     and fold into their target's group."""
     rqs = (
         prototype_db.query(ResearchQuestion)
-        .filter(ResearchQuestion.user_id == config.default_user_id, ResearchQuestion.archived.is_(False))
+        .filter(ResearchQuestion.user_id == user_id, ResearchQuestion.archived.is_(False))
         .order_by(ResearchQuestion.display_order, ResearchQuestion.id)
         .all()
     )
@@ -66,10 +67,11 @@ def _focus_warning(count: int) -> str | None:
 
 @router.get("/organize")
 def get_organize(
-    cortico_db: Session = Depends(get_cortico_db), prototype_db: Session = Depends(get_prototype_db)
+    cortico_db: CorticoSource = Depends(get_source), prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
     edges = active_merge_edges(prototype_db)
-    rqs = _target_rqs(prototype_db, edges)
+    rqs = _target_rqs(prototype_db, edges, user.id)
     serialized = serialize_rqs(prototype_db, rqs)
 
     loaded = []
@@ -81,16 +83,16 @@ def get_organize(
     conv_by_connection = _conversation_ids(prototype_db, group_connections)
     conv_ids = {cid for cid in conv_by_connection.values() if cid is not None}
     titles = (
-        {c.id: c.title for c in cortico_db.query(Conversation).filter(Conversation.id.in_(conv_ids))}
+        {cid: c.title for cid, c in as_source(cortico_db).conversations_by_ids(conv_ids).items()}
         if conv_ids
         else {}
     )
 
-    highlights = starred_highlights(prototype_db)
+    highlights = starred_highlights(prototype_db, user.id)
     text_by_span = evidence_texts(cortico_db, group_connections, highlights)
     serialize_evidence = evidence_serializer(prototype_db, group_connections, text_by_span)
     # Computed against every filed connection, like GET /memo, then narrowed per group.
-    unassigned = starred_unassigned_groups(cortico_db, filed_connections(prototype_db), highlights, text_by_span)
+    unassigned = starred_unassigned_groups(cortico_db, filed_connections(prototype_db, user.id), highlights, text_by_span)
 
     groups = []
     for rq_dict, (connections, families) in zip(serialized, loaded):
@@ -135,12 +137,13 @@ def get_organize(
 
 @router.get("/codebook_prep")
 def get_codebook_prep(
-    cortico_db: Session = Depends(get_cortico_db), prototype_db: Session = Depends(get_prototype_db)
+    cortico_db: CorticoSource = Depends(get_source), prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
     """A draft codebook for the focused RQs: their starred, live code families with each
     member entry and its quoted evidence. Read-only; the browser saves the file."""
     edges = active_merge_edges(prototype_db)
-    focused = [r for r in serialize_rqs(prototype_db, _target_rqs(prototype_db, edges)) if r["focused"]]
+    focused = [r for r in serialize_rqs(prototype_db, _target_rqs(prototype_db, edges, user.id)) if r["focused"]]
 
     warnings: list[str] = []
     focus_warning = _focus_warning(len(focused))
@@ -206,7 +209,7 @@ def get_codebook_prep(
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "user_id": config.default_user_id,
+        "user_id": user.id,
         "research_questions": [
             {
                 "id": rq["id"],

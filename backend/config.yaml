@@ -1,6 +1,24 @@
 # Prototype config — model id/effort and other tunables live here, not in code,
 # so they can change without a rebuild (PRD: "AI behavior" / "Model and editable prompt").
 
+# "snapshot": local read-only Cortico copy, single implicit user (default_user_id).
+# "cortico_api": users sign in with Cortico; reads go to the v2 API. Env DATA_SOURCE overrides.
+data_source: "snapshot"
+
+cortico:
+  base_url: "https://api2.cortico.ai"
+  timeout_seconds: 20
+  max_retries: 2
+  snippet_cache_ttl_seconds: 3600
+  tool_id: "notes-in-the-margin"
+  write_back:
+    highlights: true
+
+session:
+  cookie_name: "nim_session"
+  max_age_days: 7
+  cookie_samesite: "lax"
+
 default_user_id: 101
 default_project_id: 5
 

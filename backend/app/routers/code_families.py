@@ -5,8 +5,10 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from ..auth import CurrentUser, current_user, get_source
 from ..config import get_config
-from ..db import get_cortico_db, get_prototype_db
+from ..cortico.source import CorticoSource
+from ..db import get_prototype_db
 from ..models_prototype import (
     CodeFamily,
     CodeFamilyMember,
@@ -191,8 +193,9 @@ def code_family_state(rq_id: int, prototype_db: Session = Depends(get_prototype_
 def synthesize(
     rq_id: int,
     override_cap: bool = False,
-    cortico_db: Session = Depends(get_cortico_db),
+    cortico_db: CorticoSource = Depends(get_source),
     prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
     rq = prototype_db.get(ResearchQuestion, rq_id)
     if rq is None:
@@ -201,7 +204,7 @@ def synthesize(
         prototype_db=prototype_db,
         cortico_db=cortico_db,
         config=config,
-        user_id=config.default_user_id,
+        user_id=user.id,
         research_question_id=rq_id,
         override_cap=override_cap,
     )
@@ -223,7 +226,7 @@ def update_family(family_id: int, body: CodeFamilyUpdate, prototype_db: Session 
 
 
 @router.post("/research_questions/{rq_id}/code_families")
-def create_family(rq_id: int, body: CodeFamilyCreate, prototype_db: Session = Depends(get_prototype_db)):
+def create_family(rq_id: int, body: CodeFamilyCreate, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)):
     """A user-made family: accepted, no ai_metadata, and not blocked by the cap (the
     returned cap lets the UI warn)."""
     if prototype_db.get(ResearchQuestion, rq_id) is None:
@@ -234,7 +237,7 @@ def create_family(rq_id: int, body: CodeFamilyCreate, prototype_db: Session = De
     target_rq_id = resolve_rq_id(prototype_db, rq_id)
 
     family = CodeFamily(
-        user_id=config.default_user_id,
+        user_id=user.id,
         research_question_id=target_rq_id,
         name=name,
         definition=definition,

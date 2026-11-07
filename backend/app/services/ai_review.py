@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from ..config import Config
 from ..evidence_provenance import highlight_spans, resolve_evidence
-from ..models_cortico import Participant, Snippet
+from ..cortico.source import as_source
 from ..models_prototype import (
     AppSetting,
     ConnectionEvidence,
@@ -123,30 +123,16 @@ _OUTPUT_SCHEMA = {
 
 
 def _build_transcript_context(cortico_db: Session, conversation_id: int) -> list[dict]:
-    snippets = (
-        cortico_db.query(Snippet)
-        .filter(Snippet.conversation_id == conversation_id)
-        .order_by(Snippet.order_index)
-        .all()
-    )
-    participants = {
-        p.id: p for p in cortico_db.query(Participant).filter(
-            Participant.conversation_id == conversation_id
-        )
-    }
-    out = []
-    for s in snippets:
-        speaker = participants.get(s.participant_id)
-        out.append(
-            {
-                "snippet_id": s.id,
-                "speaker": speaker.name if speaker else None,
-                "is_facilitator": bool(speaker.is_facilitator) if speaker else False,
-                "text": s.text,
-                "word_count": len(json.loads(s.words)) if s.words else 0,
-            }
-        )
-    return out
+    return [
+        {
+            "snippet_id": s.id,
+            "speaker": s.speaker_name,
+            "is_facilitator": s.is_facilitator,
+            "text": s.text,
+            "word_count": len(s.words),
+        }
+        for s in as_source(cortico_db).snippets(conversation_id)
+    ]
 
 
 def _build_highlight_context(prototype_db: Session, user_id: int, conversation_id: int) -> list[dict]:
@@ -187,11 +173,10 @@ def reflection_timestamp_from_words(
 def _validate_evidence_in_range(
     cortico_db: Session, conversation_id: int, snippet_id: int, start_index: int, end_index: int
 ) -> bool:
-    snippet = cortico_db.get(Snippet, snippet_id)
+    snippet = as_source(cortico_db).snippets_by_ids({snippet_id}).get(snippet_id)
     if snippet is None or snippet.conversation_id != conversation_id:
         return False
-    word_count = len(json.loads(snippet.words)) if snippet.words else 0
-    return 0 <= start_index < end_index <= word_count
+    return 0 <= start_index < end_index <= len(snippet.words)
 
 
 def generate_connections(

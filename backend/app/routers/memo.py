@@ -5,11 +5,12 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from ..auth import CurrentUser, current_user, get_source
 from ..config import get_config
-from ..db import get_cortico_db, get_prototype_db
+from ..cortico.source import CorticoSource, as_source
+from ..db import get_prototype_db
 from ..evidence_provenance import assigned_highlight_ids, evidence_row, highlight_spans
 from ..evidence_text import quoted_texts
-from ..models_cortico import Conversation
 from ..models_prototype import (
     ReflectionConnection,
     ReflectionConnectionRevision,
@@ -26,14 +27,19 @@ config = get_config()
 FILED_STATUSES = ("accepted", "edited")
 
 
-def filed_connections(prototype_db: Session) -> list[ReflectionConnection]:
-    return prototype_db.query(ReflectionConnection).filter(ReflectionConnection.status.in_(FILED_STATUSES)).all()
+def filed_connections(prototype_db: Session, user_id: int) -> list[ReflectionConnection]:
+    return (
+        prototype_db.query(ReflectionConnection)
+        .join(VoiceMemo, VoiceMemo.id == ReflectionConnection.voice_memo_id)
+        .filter(ReflectionConnection.status.in_(FILED_STATUSES), VoiceMemo.user_id == user_id)
+        .all()
+    )
 
 
-def starred_highlights(prototype_db: Session) -> list[RLHighlight]:
+def starred_highlights(prototype_db: Session, user_id: int) -> list[RLHighlight]:
     return (
         prototype_db.query(RLHighlight)
-        .filter(RLHighlight.user_id == config.default_user_id, RLHighlight.starred.is_(True))
+        .filter(RLHighlight.user_id == user_id, RLHighlight.starred.is_(True))
         .all()
     )
 
@@ -87,7 +93,7 @@ def starred_unassigned_groups(
     for h in highlights:
         if h.id in cited:
             continue
-        conv = cortico_db.get(Conversation, h.conversation_id)
+        conv = as_source(cortico_db).conversations_by_ids({h.conversation_id}).get(h.conversation_id)
         group = groups.setdefault(
             h.conversation_id,
             {"conversation_id": h.conversation_id, "conversation_title": conv.title if conv else None, "highlights": []},
@@ -112,9 +118,10 @@ def starred_unassigned_groups(
 
 @router.get("")
 def get_memo(
-    cortico_db: Session = Depends(get_cortico_db), prototype_db: Session = Depends(get_prototype_db)
+    cortico_db: CorticoSource = Depends(get_source), prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
-    connections = filed_connections(prototype_db)
+    connections = filed_connections(prototype_db, user.id)
 
     voice_memo_ids = {c.voice_memo_id for c in connections}
     voice_memos = {
@@ -123,19 +130,19 @@ def get_memo(
 
     conv_ids = {vm.conversation_id for vm in voice_memos.values()}
     conversations = (
-        {c.id: c for c in cortico_db.query(Conversation).filter(Conversation.id.in_(conv_ids))}
+        as_source(cortico_db).conversations_by_ids(conv_ids)
         if conv_ids
         else {}
     )
 
     research_questions = (
         prototype_db.query(ResearchQuestion)
-        .filter(ResearchQuestion.user_id == config.default_user_id)
+        .filter(ResearchQuestion.user_id == user.id)
         .order_by(ResearchQuestion.display_order)
         .all()
     )
 
-    all_starred_highlights = starred_highlights(prototype_db)
+    all_starred_highlights = starred_highlights(prototype_db, user.id)
     text_by_span = evidence_texts(cortico_db, connections, all_starred_highlights)
     serialize_evidence = evidence_serializer(prototype_db, connections, text_by_span)
 

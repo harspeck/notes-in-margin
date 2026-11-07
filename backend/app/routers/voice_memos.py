@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from ..auth import CurrentUser, current_user
 from ..config import get_config
 from ..db import PrototypeSession, get_prototype_db
 from ..models_prototype import VoiceMemo
@@ -69,6 +70,7 @@ async def create_voice_memo(
     audio: UploadFile,
     duration: float = Form(...),
     prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
     if duration > config.voice_memo.max_duration_seconds:
         raise HTTPException(400, f"recording exceeds the {config.voice_memo.max_duration_seconds}s cap")
@@ -79,7 +81,7 @@ async def create_voice_memo(
     dest.write_bytes(await audio.read())
 
     vm = VoiceMemo(
-        user_id=config.default_user_id,
+        user_id=user.id,
         conversation_id=conversation_id,
         audio_path=str(dest.relative_to(config.project_root)),
         duration=duration,
@@ -121,11 +123,12 @@ def edit_voice_memo(
 
 @router.get("/conversations/{conversation_id}/voice_memos")
 def list_voice_memos_for_conversation(
-    conversation_id: int, prototype_db: Session = Depends(get_prototype_db)
+    conversation_id: int, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
     vms = (
         prototype_db.query(VoiceMemo)
-        .filter(VoiceMemo.conversation_id == conversation_id, VoiceMemo.user_id == config.default_user_id)
+        .filter(VoiceMemo.conversation_id == conversation_id, VoiceMemo.user_id == user.id)
         .order_by(VoiceMemo.recorded_at)
         .all()
     )

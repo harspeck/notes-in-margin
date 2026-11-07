@@ -11,7 +11,7 @@ from openai import OpenAI
 from sqlalchemy.orm import Session
 
 from ..config import Config
-from ..models_cortico import Conversation
+from ..cortico.source import as_source
 from ..models_prototype import ConversationGist, NextStepSuggestion, ResearchQuestion, RLHighlight, TranscriptState, VoiceMemo
 
 NEXT_STEPS_PROMPT = """You help a sensemaker decide what to listen to next in a large interview \
@@ -108,13 +108,13 @@ def _existing_suggestions_context(prototype_db: Session, user_id: int) -> list[d
 
 
 def _gist_context(prototype_db: Session, cortico_db: Session) -> list[dict]:
+    source = as_source(cortico_db)
     gists = prototype_db.query(ConversationGist).all()
-    conv_ids = {g.conversation_id for g in gists}
-    titles = (
-        {c.id: c.title for c in cortico_db.query(Conversation).filter(Conversation.id.in_(conv_ids))}
-        if conv_ids
-        else {}
-    )
+    known = source.conversations_by_ids({g.conversation_id for g in gists})
+    if source.kind != "snapshot":
+        # Only conversations this user's Cortico access has listed; never other users' corpora.
+        gists = [g for g in gists if g.conversation_id in known]
+    titles = {cid: c.title for cid, c in known.items()}
     return [
         {
             "conversation_id": g.conversation_id,
@@ -132,7 +132,7 @@ def _valid_conversation_ids(cortico_db: Session, candidate_ids: set[int]) -> set
     ever persisted — don't trust the model's ids blindly."""
     if not candidate_ids:
         return set()
-    return {row.id for row in cortico_db.query(Conversation.id).filter(Conversation.id.in_(candidate_ids))}
+    return set(as_source(cortico_db).conversations_by_ids(candidate_ids))
 
 
 def generate_next_step_suggestions(

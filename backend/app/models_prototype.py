@@ -288,3 +288,97 @@ class AppSetting(PrototypeBase):
     key = Column(String, primary_key=True)
     value = Column(Text, nullable=False)
     updated_at = Column(DateTime, nullable=False, default=_now, onupdate=_now)
+
+
+# --- Cortico v2 integration (cortico_api mode). New tables only, so create_all picks them
+# up on an existing database without a migration. All carry the rl_ prefix (db/schema.sql).
+
+
+class RLSession(PrototypeBase):
+    """A signed-in browser session. The cookie holds a random token; only its sha256 is
+    stored. Cortico tokens are encrypted with SESSION_SECRET. Refresh tokens rotate on every
+    use, so refresh runs under a row lock (see app/auth.py)."""
+
+    __tablename__ = "rl_session"
+    token_hash = Column(String(64), primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)  # Cortico user id from /v2/me
+    email = Column(String)
+    display_name = Column(String)
+    access_token_enc = Column(Text, nullable=False)
+    refresh_token_enc = Column(Text, nullable=False)
+    access_expires_at = Column(DateTime(timezone=True), nullable=False)
+    active_workspace_id = Column(Integer)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    last_seen_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+class RLWorkspace(PrototypeBase):
+    """A user-named bundle of Cortico projects in one organization. The integer id is the
+    handle other apps (llm-auto-highlighter stores single-int workspace keys) can adopt."""
+
+    __tablename__ = "rl_workspace"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    organization_id = Column(Integer, nullable=False)
+    name = Column(String, nullable=False)
+    project_ids_json = Column(Text, nullable=False)  # JSON list[int] of Cortico project ids
+    data_source = Column(String, nullable=False)  # ids only make sense within one source
+    archived = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+
+
+class RLCorticoConversation(PrototypeBase):
+    """Read-through cache of v2 conversation metadata. v2 conversations carry forum_id but
+    not project_id, so the project comes from the /v2/conversations?project_id= listing."""
+
+    __tablename__ = "rl_cortico_conversation"
+    id = Column(Integer, primary_key=True, autoincrement=False)  # Cortico conversation id
+    project_id = Column(Integer, index=True)
+    forum_id = Column(Integer)
+    title = Column(String)
+    duration_seconds = Column(Float)
+    start_time = Column(String)
+    has_audio = Column(Boolean, nullable=False, default=False)
+    num_participants = Column(Integer)
+    fetched_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+class RLCorticoSnippet(PrototypeBase):
+    """Read-through cache of v2 transcript snippets. Evidence rows store only
+    (snippet_id, start, end), so quoting them later needs the words without a conversation
+    id in hand. The uuid is what POST /v2/highlights needs."""
+
+    __tablename__ = "rl_cortico_snippet"
+    id = Column(Integer, primary_key=True, autoincrement=False)  # Cortico snippet id
+    uuid = Column(String)
+    conversation_id = Column(Integer, nullable=False, index=True)
+    order_index = Column(Integer, nullable=False)
+    speaker_name = Column(String)
+    is_facilitator = Column(Boolean, nullable=False, default=False)
+    start_offset = Column(Float)
+    end_offset = Column(Float)
+    text = Column(Text, nullable=False, default="")
+    words_json = Column(Text, nullable=False, default="[]")
+    fetched_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+class RLCorticoSync(PrototypeBase):
+    """One row per local object mirrored to Cortico (today: highlights). The local write
+    always succeeds first; this row records whether the Cortico copy exists, so a failed
+    push can be retried without creating duplicates."""
+
+    __tablename__ = "rl_cortico_sync"
+    id = Column(Integer, primary_key=True)
+    local_kind = Column(String, nullable=False)  # "highlight"
+    local_id = Column(Integer, nullable=False)
+    cortico_kind = Column(String, nullable=False)  # "highlight"
+    cortico_id = Column(Integer)
+    status = Column(String, nullable=False, default="pending")  # pending|synced|failed|skipped|deleted
+    error = Column(Text)
+    attempts = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+
+    __table_args__ = (UniqueConstraint("local_kind", "local_id", name="uq_rl_cortico_sync_local"),)

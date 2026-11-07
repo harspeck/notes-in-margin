@@ -3,10 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from ..auth import CurrentUser, current_user, get_source
 from ..config import get_config
-from ..db import get_cortico_db, get_prototype_db
-from ..guide import guide_questions_in_order, resolve_guide
-from ..models_cortico import Conversation
+from ..cortico.source import CorticoSource
+from ..db import get_prototype_db
 from ..models_prototype import SectionCheckpoint
 from ..schemas import CheckpointSet
 
@@ -18,14 +18,14 @@ config = get_config()
 def set_checkpoint(
     conversation_id: int,
     body: CheckpointSet,
-    cortico_db: Session = Depends(get_cortico_db),
+    source: CorticoSource = Depends(get_source),
     prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
-    conversation = cortico_db.get(Conversation, conversation_id)
+    conversation = source.conversation(conversation_id)
     if conversation is None:
         raise HTTPException(404, "conversation not found")
-    guide = resolve_guide(cortico_db, conversation)
-    valid_question_ids = {q.id for q in guide_questions_in_order(cortico_db, guide)} if guide else set()
+    valid_question_ids = {q.id for q in source.guide_questions(conversation)}
     if body.guide_question_id not in valid_question_ids:
         raise HTTPException(400, "guide_question_id is not part of this conversation's guide")
 
@@ -33,7 +33,7 @@ def set_checkpoint(
     existing = (
         prototype_db.query(SectionCheckpoint)
         .filter(
-            SectionCheckpoint.user_id == config.default_user_id,
+            SectionCheckpoint.user_id == user.id,
             SectionCheckpoint.conversation_id == conversation_id,
             SectionCheckpoint.guide_question_id == body.guide_question_id,
         )
@@ -44,7 +44,7 @@ def set_checkpoint(
     else:
         prototype_db.add(
             SectionCheckpoint(
-                user_id=config.default_user_id,
+                user_id=user.id,
                 conversation_id=conversation_id,
                 guide_question_id=body.guide_question_id,
                 snippet_id=body.snippet_id,
@@ -56,12 +56,13 @@ def set_checkpoint(
 
 @router.delete("/{guide_question_id}")
 def delete_checkpoint(
-    conversation_id: int, guide_question_id: int, prototype_db: Session = Depends(get_prototype_db)
+    conversation_id: int, guide_question_id: int, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
     existing = (
         prototype_db.query(SectionCheckpoint)
         .filter(
-            SectionCheckpoint.user_id == config.default_user_id,
+            SectionCheckpoint.user_id == user.id,
             SectionCheckpoint.conversation_id == conversation_id,
             SectionCheckpoint.guide_question_id == guide_question_id,
         )

@@ -5,9 +5,10 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from ..auth import CurrentUser, current_user, get_source
 from ..config import get_config
-from ..db import get_cortico_db, get_prototype_db
-from ..models_cortico import Conversation
+from ..cortico.source import CorticoSource, as_source
+from ..db import get_prototype_db
 from ..models_prototype import NextStepSuggestion
 from ..services.next_steps import generate_next_step_suggestions
 
@@ -35,15 +36,16 @@ def _titles_for(cortico_db: Session, suggestions: list[NextStepSuggestion]) -> d
     conv_ids = {s.recommended_conversation_id for s in suggestions if s.recommended_conversation_id}
     if not conv_ids:
         return {}
-    return {c.id: c.title for c in cortico_db.query(Conversation).filter(Conversation.id.in_(conv_ids))}
+    return {cid: c.title for cid, c in as_source(cortico_db).conversations_by_ids(conv_ids).items()}
 
 
 @router.post("/generate")
 def generate(
-    cortico_db: Session = Depends(get_cortico_db), prototype_db: Session = Depends(get_prototype_db)
+    cortico_db: CorticoSource = Depends(get_source), prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
     created = generate_next_step_suggestions(
-        prototype_db=prototype_db, cortico_db=cortico_db, config=config, user_id=config.default_user_id
+        prototype_db=prototype_db, cortico_db=cortico_db, config=config, user_id=user.id
     )
     titles = _titles_for(cortico_db, created)
     return [_serialize(s, titles) for s in created]
@@ -52,10 +54,11 @@ def generate(
 @router.get("")
 def list_suggestions(
     include_dismissed: bool = False,
-    cortico_db: Session = Depends(get_cortico_db),
+    cortico_db: CorticoSource = Depends(get_source),
     prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
-    query = prototype_db.query(NextStepSuggestion).filter(NextStepSuggestion.user_id == config.default_user_id)
+    query = prototype_db.query(NextStepSuggestion).filter(NextStepSuggestion.user_id == user.id)
     if not include_dismissed:
         query = query.filter(NextStepSuggestion.status != "dismissed")
     suggestions = query.order_by(NextStepSuggestion.created_at.desc()).all()

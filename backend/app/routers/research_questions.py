@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from ..auth import CurrentUser, active_workspace, current_user, workspace_project_ids
 from ..config import get_config
 from ..db import get_prototype_db
 from ..models_prototype import ResearchQuestion, RQFocus, RQMerge
@@ -83,10 +84,11 @@ def _get_rq(prototype_db: Session, rq_id: int) -> ResearchQuestion:
 
 @router.get("")
 def list_research_questions(
-    include_archived: bool = False, prototype_db: Session = Depends(get_prototype_db)
+    include_archived: bool = False, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
     query = prototype_db.query(ResearchQuestion).filter(
-        ResearchQuestion.user_id == config.default_user_id
+        ResearchQuestion.user_id == user.id
     )
     if not include_archived:
         query = query.filter(ResearchQuestion.archived.is_(False))
@@ -96,16 +98,19 @@ def list_research_questions(
 
 @router.post("")
 def create_research_question(
-    body: ResearchQuestionCreate, prototype_db: Session = Depends(get_prototype_db)
+    body: ResearchQuestionCreate, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
     max_order = (
         prototype_db.query(ResearchQuestion)
-        .filter(ResearchQuestion.user_id == config.default_user_id)
+        .filter(ResearchQuestion.user_id == user.id)
         .count()
     )
+    workspace_projects = workspace_project_ids(active_workspace(prototype_db, user))
     rq = ResearchQuestion(
-        user_id=config.default_user_id,
-        project_id=config.default_project_id,
+        user_id=user.id,
+        # A research question spans the workspace; project_id records where it started.
+        project_id=workspace_projects[0] if workspace_projects else config.default_project_id,
         name=body.name,
         description=body.description,
         display_order=max_order,
@@ -149,13 +154,13 @@ def reorder_research_questions(
 
 
 @router.post("/{rq_id}/focus")
-def set_focus(rq_id: int, body: FocusRequest, prototype_db: Session = Depends(get_prototype_db)):
+def set_focus(rq_id: int, body: FocusRequest, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)):
     rq = _get_rq(prototype_db, rq_id)
     if rq.id in active_merge_edges(prototype_db):
         raise HTTPException(409, "this research question is merged into another; focus its target instead")
     focus = prototype_db.get(RQFocus, rq.id)
     if focus is None:
-        focus = RQFocus(research_question_id=rq.id, user_id=config.default_user_id)
+        focus = RQFocus(research_question_id=rq.id, user_id=user.id)
         prototype_db.add(focus)
     focus.focused = body.focused
     prototype_db.commit()
@@ -163,11 +168,11 @@ def set_focus(rq_id: int, body: FocusRequest, prototype_db: Session = Depends(ge
 
 
 @router.post("/{rq_id}/merge_into")
-def merge_into(rq_id: int, body: RQMergeRequest, prototype_db: Session = Depends(get_prototype_db)):
+def merge_into(rq_id: int, body: RQMergeRequest, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)):
     source = _get_rq(prototype_db, rq_id)
     target = _get_rq(prototype_db, body.target_id)
     try:
-        merge = merge_rq(prototype_db, user_id=config.default_user_id, source=source, target=target)
+        merge = merge_rq(prototype_db, user_id=user.id, source=source, target=target)
     except ValueError as e:
         raise HTTPException(409, str(e))
     prototype_db.refresh(source)
