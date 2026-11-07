@@ -74,4 +74,7 @@ def get_config() -> Config:
     override = os.environ.get("PROTOTYPE_DB_PATH")
     if override:
         raw["prototype_db_path"] = override
+    snapshot_override = os.environ.get("CORTICO_DB_PATH")
+    if snapshot_override:
+        raw["cortico_db_path"] = snapshot_override
     return Config.model_validate(raw)
