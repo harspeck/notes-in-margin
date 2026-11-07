@@ -15,7 +15,7 @@ When unsure, go one tier higher.
 
 ## 2. What this project is
 
-"Notes in the Margin" is a single-user, local-only reflective-listening prototype. A
+"Notes in the Margin" is a reflective-listening prototype. A
 researcher reads Cortico conversation transcripts, highlights passages, records voice memos
 that are transcribed locally, and files AI-suggested research-question (RQ) connections, next
 steps and code families into a memo. The stack is FastAPI + SQLAlchemy (`backend/`) over two
@@ -24,8 +24,14 @@ TypeScript (`frontend/`). Source data is `acp_pipeline_snapshot.db`, a read-only
 the Cortico pipeline (201 conversations, 54 projects); everything the app writes goes to
 `db/prototype.db`.
 
+It runs in two modes (`data_source`, see `docs/architecture/cortico.md`). In `snapshot` mode it
+reads that snapshot as one implicit user (local dev and tests). In `cortico_api` mode, the
+deployed one, users sign in with their Cortico account, pick a workspace (a named bundle of
+projects), and every Cortico read goes to the v2 API with their token. That mode's sidecar is
+Neon Postgres (`DATABASE_URL`), and highlights are written back to Cortico.
+
 Retired. Never bring these back:
-- **`scoped_conversation_ids`** (the config key and the `[9, 10]` filter on `GET /conversations`), because the full 201-conversation corpus is intentional (removed in 61c716a; see `docs/prototype-log.md`).
+- **`scoped_conversation_ids`** (the config key and the `[9, 10]` filter on `GET /conversations`), because the full 201-conversation corpus is intentional (removed in 61c716a; see `docs/prototype-log.md`). Scoping now comes only from the user's workspace (its project ids), never from a hard-coded id list.
 - **The PRD's original names:** the `highlight` table (it is `rl_highlight`, because the snapshot's naming would collide), `snippet_uuid` (Cortico's integer `snippet_id` is used), `guide_prompt_id` (it is `guide_question_id`, after the snapshot's `guidequestion` table), and tuple-shaped words (they are dicts), because `docs/prototype-log.md` records each deviation and the code depends on the new names.
 - **Embeddings, vector search or a keyword heuristic for next-step recommendations**, because `docs/prd-phase-2.md` decided against them. Don't re-litigate.
 - **`uvicorn --reload`**, because it leaves orphaned workers that don't show as "uvicorn" (`docs/prototype-log.md`). Stop the server by port.
@@ -36,17 +42,21 @@ Every command below was run and worked on 2026-10-26.
 
 | Purpose | Command |
 |---|---|
-| Setup (backend) | `cd backend && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt` |
+| Setup (backend) | `cd backend && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements-dev.txt` (`requirements.txt` is the deployed runtime set; `-local` adds faster-whisper; `-dev` adds pytest) |
 | Setup (frontend) | `cd frontend && npm install` |
 | Run backend | `cd backend && .venv/bin/uvicorn app.main:app --port 8000` (no `--reload`; `GET /health` → `{"ok":true}`) |
 | Run frontend | `cd frontend && npm run dev`, then open http://localhost:5173 |
-| Test | `cd backend && .venv/bin/python -m pytest -q` (80 tests, about 1.3 s) |
+| Test | `cd backend && OPENAI_API_KEY=sk-fake .venv/bin/python -m pytest -q` (92 tests or more, about 1.5 s) |
+| Create sidecar tables | `cd backend && .venv/bin/python scripts/init_db.py --env-file .env.local` (after `vercel env pull`; idempotent) |
+| Live Cortico check | `cd backend && .venv/bin/python scripts/cortico_smoke.py --api <url> --org 353` (the user runs it; it prompts for their Cortico password) |
+| Deploy (preview) | `cd backend && vercel deploy` (project `notes-in-the-margin-api`, team Cortico-Prototypes) |
 | Lint | `cd frontend && npm run lint` (oxlint; exits 0 with 10 existing warnings) |
 | Typecheck | `cd frontend && npx tsc -b --noEmit` |
 | Build | `cd frontend && npm run build` |
 | Back up | `cd backend && .venv/bin/python scripts/export_md.py` (Markdown export plus a SQLite copy into `db/local/`; `--no-db-backup`, `--out-dir DIR`) |
 
-- **Ports are fixed:** the backend must be on 8000 and the frontend on 5173, because `frontend/src/lib/api.ts` hard-codes `BASE = "http://localhost:8000"`, there is no Vite proxy, and CORS in `backend/app/main.py` allows only `http://localhost:5173`.
+- **Ports are fixed locally:** the backend must be on 8000 and the frontend on 5173, because `frontend/src/lib/api.ts` hard-codes `BASE = "http://localhost:8000"` and there is no Vite proxy. CORS comes from `cors_origins` (env `CORS_ORIGINS`, comma-separated) and allows credentials, for the session cookie.
+- **Tests never use a real database:** `tests/conftest.py` drops `DATABASE_URL`, `POSTGRES_URL`, `DATA_SOURCE` and `SESSION_SECRET` before importing the app. `tests/test_cortico_api_mode.py` runs `cortico_api` mode against an `httpx.MockTransport` fake of Cortico (set `app.auth.TRANSPORT`).
 - **What tests need:** no network, no API key (they pass with a fake `OPENAI_API_KEY` and network blocked) and no running server. They use `acp_pipeline_snapshot.db` at the repo root when it is there. Without it (and with `CORTICO_DB_PATH` unset), `tests/conftest.py` builds a synthetic stand-in with `tests/fixtures/build_snapshot_fixture.py` into a temp file and points `CORTICO_DB_PATH` at it. The fixture reproduces only the snapshot facts the tests assert on, so a new test that asserts on other real data must add them to the builder.
 - **The tests' prototype database:** `tests/conftest.py` points `PROTOTYPE_DB_PATH` at a temp file before importing the app, using `setdefault`. Never export `PROTOTYPE_DB_PATH` in your shell to the real dev database, because the tests would then write test rows into it.
 - **In a git worktree:** the snapshot, `backend/.venv` and `frontend/node_modules` are gitignored and missing. Symlink the main checkout's `acp_pipeline_snapshot.db` (if you have it; the tests fall back to the fixture otherwise) and `frontend/node_modules` into the worktree, and run the main checkout's `backend/.venv/bin/python`.
@@ -56,8 +66,10 @@ Every command below was run and worked on 2026-10-26.
 
 ## 4. Production safety
 
-There is no deployment: no Docker, Vercel, CI or Procfile, and `localhost` is hard-coded on
-both sides. The shared state is local, and these rules protect it:
+The backend deploys to Vercel as the project `notes-in-the-margin-api` (team Cortico-Prototypes,
+root `backend/`, entrypoint `backend/index.py`), in `cortico_api` mode, with a Neon Postgres
+sidecar from the Vercel Marketplace. The frontend is not deployed yet. These rules protect the
+shared state:
 
 | State | Rule |
 |---|---|
@@ -68,7 +80,11 @@ both sides. The shared state is local, and these rules protect it:
 | Paid OpenAI calls | `POST /voice_memos/{id}/review`, `POST /next_steps/generate`, `POST /research_questions/{rq_id}/code_families/synthesize`, `scripts/backfill_gists.py`. Ask before triggering any of them. Tests never call the model; check a live round trip by hand only with the user's go-ahead. |
 | Backfill scripts on the dev database | The user runs these. Hand off the dry run first as one line, e.g. `cd backend && .venv/bin/python scripts/backfill_evidence_highlights.py --dry-run`, say what output to expect, then give the real run. Try it first against a copy via `PROTOTYPE_DB_PATH`. |
 | `backend/.env` | Holds `OPENAI_API_KEY` and `OPENAI_BASE_URL`. Never print or open it; check by variable name only. The user edits it. |
-| Git and GitHub | PRs go to `github.com/mdetwiller/notes-in-margin`. Never push, open a PR or merge without the user asking, and only merge PRs this session opened. Commit on a branch, never on `main`. |
+| `backend/.env.local` and Vercel env | `vercel env pull` writes the Neon credentials here. Never print values; use `vercel env ls` for names. `SESSION_SECRET` encrypts every stored Cortico token: rotating it signs everyone out. |
+| Neon Postgres (`DATABASE_URL`) | Real users' sidecar data. Never run tests or ad-hoc writes against it. Schema changes there follow the same rule as below: new tables only, and ask before any column change. |
+| Cortico | Writes go only through `app/cortico/write_back.py`. Never call a Cortico write route by hand, and never delete a Cortico object this app didn't create (`rl_cortico_sync` records which ones it did). Live checks run through `scripts/cortico_smoke.py`, by the user. |
+| Vercel production | Deploy previews freely; ask before `vercel deploy --prod` or promoting. |
+| Git and GitHub | This checkout is the fork `github.com/harspeck/notes-in-margin` (`origin`); `upstream` is `github.com/mdetwiller/notes-in-margin`. PRs go to the fork unless the user says upstream. The repo is public: never commit transcript text, `.env*`, the snapshot, or Cortico's OpenAPI spec. Never push, open a PR or merge without the user asking, and only merge PRs this session opened. Commit on a branch, never on `main`. |
 
 ## 5. Architecture map
 
@@ -94,7 +110,12 @@ can break.
 **Review and memo** (`routers/review.py`, `routers/memo.py`)
 - `POST /voice_memos/{id}/file` (`file_to_memo`) is the only route that moves a connection to accepted or edited, because nothing may reach the memo before "File to memo" (`tests/test_review_filing.py`).
 - An edit writes a `ReflectionConnectionRevision` first, then sets `source="user"` and `edited_from_ai=True`, because prior versions are kept.
-- A highlight's `project_id` comes from the Cortico conversation, never from `config.default_project_id`, because that was a real bug (`tests/test_highlights.py`).
+- A highlight's `project_id` comes from the Cortico conversation, never from `config.default_project_id`, because that was a real bug (`tests/test_highlights.py`). In `cortico_api` mode the conversation's project comes from the workspace listing (`rl_cortico_conversation`), because v2 conversations carry only `forum_id`.
+
+**Cortico data and identity** (`app/cortico/`, `app/auth.py`, `routers/auth.py`, `routers/workspaces.py`)
+- Every Cortico read goes through the request's data source (`Depends(get_source)` in routers, `as_source(cortico_db)` in services). Never query `models_cortico` from a router, because the API mode has no snapshot.
+- Every route takes `user: CurrentUser = Depends(current_user)` and scopes by `user.id`. Rows owned by another user answer 404, never 403. `main.py` also puts `current_user` on every router except `/auth`.
+- Cortico user ids are the user ids in API mode. Never hard-code a user, organization or project id outside `config.yaml`.
 
 **Code families** (`services/code_families.py`, `routers/code_families.py`)
 - The per-RQ cap counts only `LIVE_FAMILY_STATUSES = ("suggested", "accepted")`, against `config.code_families` (`max_per_rq: 5`, `near_cap_at: 4`, `max_new_per_run: 2`), and is enforced server-side. `override_cap` still limits a run to `max_new_per_run`.
@@ -122,6 +143,7 @@ can break.
 | Review, filing, memo, evidence and highlights | `docs/architecture/review-and-memo.md` |
 | Code families, the cap, merges | `docs/architecture/code-families.md` |
 | Frontend pages, components, `api.ts`, `types.ts` | `docs/architecture/frontend.md` |
+| Cortico API, sign-in, workspaces, caches, write-back | `docs/architecture/cortico.md` |
 | Writing or changing tests | `docs/architecture/tests.md` |
 
 ## 6. Key conventions
@@ -137,7 +159,7 @@ can break.
   - `conversation_gist` is keyed by Cortico `conversation_id` and is never refreshed.
   - The editable review prompt lives in `app_setting` under `REVIEW_PROMPT_SETTING_KEY = "review_prompt"`.
   - Audio files sit flat in `db/local/audio`, because `audioUrlFor` in `api.ts` keeps only the basename.
-- **Single user:** every user-scoped read and write uses `config.default_user_id` (101), and `GET /memo` doesn't filter by user. This is intentional; there is no auth.
+- **Users:** in `snapshot` mode every request is `config.default_user_id` (101), with no sign-in. In `cortico_api` mode the user is the signed-in Cortico account. `GET /memo` filters connections through `VoiceMemo.user_id`.
 - **Pinned dependency:** keep `av==13.1.0`, because 19.x breaks faster-whisper (`docs/prototype-log.md`).
 - **Tests to copy:**
   - A router test: copy `backend/tests/test_review_filing.py` (seed rows with `PrototypeSession`, call through `TestClient(app)`).

@@ -9,6 +9,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # Prototype-owned tables go to a scratch file for the test run, so pytest never leaves
 # test rows (RQs, highlights, voice memos...) behind in db/prototype.db, the real dev
 # database.
+# A DATABASE_URL in the shell (say, after `vercel env pull`) would send test rows to the real
+# Postgres sidecar, and DATA_SOURCE would switch modes. Tests always use scratch SQLite.
+for _var in ("DATABASE_URL", "POSTGRES_URL", "DATA_SOURCE", "SESSION_SECRET"):
+    os.environ.pop(_var, None)
 os.environ.setdefault("PROTOTYPE_DB_PATH", os.path.join(tempfile.mkdtemp(), "test_prototype.db"))
 
 # The Cortico snapshot is the real, read-only one when it is at the repo root. Without it,

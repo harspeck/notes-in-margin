@@ -8,7 +8,7 @@ place the build diverges from it (naming, schema, scoping).
 ```sh
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 To enable the AI review step, create `backend/.env`:
@@ -36,14 +36,28 @@ uvicorn app.main:app --port 8000
 npm run dev
 ```
 
-Open http://localhost:5173. The reader is scoped to the two conversations under project 5
-(the only project in the snapshot with a real conversation guide — see the prototype log).
+Open http://localhost:5173. Locally the app reads the snapshot (`acp_pipeline_snapshot.db`) as
+one user and lists every conversation in it.
+
+## Cortico mode and the hosted backend
+
+With `DATA_SOURCE=cortico_api`, users sign in with their Cortico account, choose a workspace
+(a named bundle of projects in an organization), and the backend reads the Cortico v2 API with
+their token. Highlights are written back to Cortico. The hosted backend is the Vercel project
+`notes-in-the-margin-api`, with a Neon Postgres sidecar. See `docs/architecture/cortico.md`.
+
+To check the live pipes with your own Cortico account:
+
+```sh
+cd backend && .venv/bin/python scripts/cortico_smoke.py --api <backend url> --org 353
+```
 
 ## Tests
 
 ```sh
-cd backend && source .venv/bin/activate && python -m pytest
+cd backend && source .venv/bin/activate && OPENAI_API_KEY=sk-fake python -m pytest
 ```
 
-Tests run against a scratch database (see `tests/conftest.py`) and the real, read-only
-Cortico snapshot — they never touch `db/prototype.db`.
+Tests run against a scratch database (see `tests/conftest.py`) and the read-only Cortico
+snapshot, or a synthetic stand-in when the snapshot isn't present. They never touch
+`db/prototype.db`, Postgres, or Cortico.

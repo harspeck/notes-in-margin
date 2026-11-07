@@ -35,7 +35,11 @@ def _set_cookie(request: Request, response: Response, token: str) -> None:
         token,
         max_age=config.session.max_age_days * 86400,
         httponly=True,
-        secure=request.url.scheme == "https" or config.session.cookie_samesite == "none",
+        secure=(
+            request.url.scheme == "https"
+            or request.headers.get("x-forwarded-proto") == "https"
+            or config.session.cookie_samesite == "none"
+        ),
         samesite=config.session.cookie_samesite,
         path="/",
     )
@@ -54,6 +58,8 @@ def login(
     never stores it."""
     if config.data_source != "cortico_api":
         raise HTTPException(400, "Sign-in is only used when DATA_SOURCE is cortico_api.")
+    if not config.session_secret:
+        raise HTTPException(503, "The server is missing SESSION_SECRET, so it can't keep sessions.")
     with new_client() as client:
         tokens = client.login(body.email.strip(), body.password)
         client.access_token = tokens["access_token"]

@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notes in the Margin, mock A</title>
+<meta name="color-scheme" content="light">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.fontshare.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@700&display=swap" rel="stylesheet">
+<style>
+/* Satoshi from Fontshare, inlined with https URLs so it also loads when the file is opened from disk */
+@font-face{font-family:"Satoshi";src:url("https://cdn.fontshare.com/wf/TTX2Z3BF3P6Y5BQT3IV2VNOK6FL22KUT/7QYRJOI3JIMYHGY6CH7SOIFRQLZOLNJ6/KFIAZD4RUMEZIYV6FQ3T3GP5PDBDB6JY.woff2") format("woff2");font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Satoshi";src:url("https://cdn.fontshare.com/wf/P2LQKHE6KA6ZP4AAGN72KDWMHH6ZH3TA/ZC32TK2P7FPS5GFTL46EU6KQJA24ZYDB/7AHDUZ4A7LFLVFUIFSARGIWCRQJHISQP.woff2") format("woff2");font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:"Satoshi";src:url("https://cdn.fontshare.com/wf/LAFFD4SDUCDVQEXFPDC7C53EQ4ZELWQI/PXCT3G6LO6ICM5I3NTYENYPWJAECAWDD/GHM6WVH6MILNYOOCXHXB5GTSGNTMGXZR.woff2") format("woff2");font-weight:700;font-style:normal;font-display:swap}
+
+/* Cortico Design System tokens (colors_and_type.css) */
+:root{
+  color-scheme:light;
+  --c-purple-900:#11112B; --c-purple-800:#2E187F; --c-purple-700:#4F29B7; --c-purple-600:#6F4FD1;
+  --c-purple-500:#8C71DD; --c-purple-200:#E0D1FF; --c-purple-100:#F0E8FF;
+  --c-ink:#11112B; --c-fg-1:#3D3F52; --c-fg-2:#595C75; --c-fg-3:#71717C; --c-fg-4:#AEB0C4;
+  --c-border:#E7E8F3; --c-border-2:#CECFDD; --c-border-3:#DDDEEB;
+  --c-bg-canvas:#FDFDFD; --c-bg-white:#FFFFFF; --c-bg-soft:#F1F1F9;
+  --c-accent-pink:#FF0099; --c-accent-mint:#4AFED1; --c-accent-red:#E3342E;
+  --c-bg:var(--c-bg-canvas); --c-shell:var(--c-purple-700); --c-text:var(--c-ink); --c-text-muted:var(--c-fg-2);
+  --c-link:var(--c-purple-700); --c-primary:var(--c-purple-700); --c-primary-fg:#FDFDFD;
+  --c-on-dark:#FDFDFD; --c-on-dark-2:var(--c-purple-200);
+  --c-success:#1F9D55; --c-warning:#D97706; --c-danger:var(--c-accent-red);
+
+  --font-sans:"Satoshi","Satoshi-Variable",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-display:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+
+  --fs-12:12px; --fs-14:14px; --fs-16:16px; --fs-18:18px; --fs-20:20px; --fs-24:24px; --fs-28:28px; --fs-32:32px;
+  --fw-regular:400; --fw-medium:500; --fw-bold:700;
+  --lh-snug:1.2; --lh-normal:1.4; --lh-relax:1.5;
+
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-7:32px; --sp-8:40px; --sp-9:48px; --sp-10:64px;
+  --r-1:4px; --r-2:8px; --r-3:12px; --r-4:16px; --r-5:20px; --r-pill:999px;
+
+  --shadow-1:0 1px 2px rgba(17,17,43,0.04);
+  --shadow-2:0 2px 8px rgba(17,17,43,0.06),0 1px 2px rgba(17,17,43,0.04);
+  --shadow-pop:0 16px 48px rgba(17,17,43,0.20);
+
+  --ease-out:cubic-bezier(.2,.7,.2,1); --dur-fast:120ms; --dur-base:180ms; --dur-slow:260ms;
+  --topbar-h:60px;
+
+  /* prototype geometry: sticky offsets depend on the prototype bar height */
+  --proto-h:46px;
+}
+
+*{box-sizing:border-box}
+html{overflow-x:clip}
+html,body{margin:0}
+body{background:var(--c-bg);color:var(--c-text);font-family:var(--font-sans);font-size:var(--fs-16);line-height:var(--lh-relax);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--c-purple-700);outline-offset:2px}
+a{color:var(--c-link);font-weight:var(--fw-medium);text-underline-offset:2px}
+a:hover{text-decoration-thickness:2px}
+h1,h2{color:var(--c-ink)}
+
+/* prototype chrome, not part of the app */
+.proto{position:sticky;top:0;z-index:50;min-height:var(--proto-h);background:var(--c-purple-900);color:var(--c-on-dark);display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:var(--sp-2) var(--sp-4);font-size:var(--fs-14);line-height:20px}
+.proto strong{margin-right:var(--sp-2);font-weight:var(--fw-bold)}
+.proto button{background:transparent;border:1px solid var(--c-fg-3);color:var(--c-on-dark);border-radius:var(--r-pill);padding:4px 12px;font-weight:var(--fw-medium);transition:background var(--dur-base) var(--ease-out),color var(--dur-base) var(--ease-out)}
+.proto button:hover{background:var(--c-purple-800)}
+.proto button[aria-current="true"]{background:var(--c-on-dark);color:var(--c-ink);border-color:var(--c-on-dark)}
+.proto .spacer{flex:1}
+.notes-toggle{background:var(--c-accent-mint)!important;color:var(--c-ink)!important;border-color:var(--c-accent-mint)!important;font-weight:var(--fw-bold)!important}
+.proto :focus-visible,.drawer :focus-visible,.toast :focus-visible{outline-color:var(--c-purple-200)}
+
+.screen{display:none}
+.screen.on{display:block}
+
+/* app shell */
+.appbar{background:var(--c-bg-canvas);border-bottom:1px solid var(--c-border);display:flex;align-items:center;gap:var(--sp-5);padding:0 var(--sp-6);height:var(--topbar-h)}
+.brand{font-family:var(--font-display);font-weight:var(--fw-bold);font-size:var(--fs-18);letter-spacing:-0.011em;line-height:var(--lh-snug);color:var(--c-ink);white-space:nowrap}
+.bundle{display:flex;align-items:center;gap:var(--sp-2);height:36px;border:1px solid var(--c-border);border-radius:var(--r-3);padding:0 var(--sp-3);background:var(--c-bg-soft);font-size:var(--fs-14);color:var(--c-fg-1);white-space:nowrap;transition:background var(--dur-base) var(--ease-out),border-color var(--dur-base) var(--ease-out)}
+.bundle:hover{background:var(--c-purple-100);border-color:var(--c-purple-200)}
+.bundle b{font-weight:var(--fw-bold);color:var(--c-ink)}
+.nav{display:flex;gap:var(--sp-1);margin-left:var(--sp-2);align-self:stretch}
+.nav a{display:flex;align-items:center;text-decoration:none;color:var(--c-fg-2);padding:0 var(--sp-3);font-size:var(--fs-14);font-weight:var(--fw-medium);white-space:nowrap;transition:color var(--dur-base) var(--ease-out)}
+.nav a:hover{color:var(--c-ink)}
+.nav a[aria-current="page"]{color:var(--c-ink);font-weight:var(--fw-bold);box-shadow:inset 0 -2px 0 var(--c-purple-700)}
+.nav a:focus-visible{outline-offset:-2px}
+.appbar .grow{flex:1}
+.avatar{flex:none;width:32px;height:32px;border-radius:var(--r-pill);background:var(--c-purple-700);color:var(--c-on-dark);display:grid;place-items:center;font-size:var(--fs-12);font-weight:var(--fw-bold)}
+
+/* buttons: secondary by default, .primary and .quiet (tertiary) variants */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);border:1px solid var(--c-border);background:var(--c-bg-soft);color:var(--c-ink);border-radius:var(--r-3);padding:9px 18px;line-height:20px;font-weight:var(--fw-bold);font-size:var(--fs-16);text-align:center;transition:background var(--dur-base) var(--ease-out),color var(--dur-base) var(--ease-out),border-color var(--dur-base) var(--ease-out),transform var(--dur-fast) var(--ease-out)}
+.btn:hover{background:var(--c-purple-100);border-color:var(--c-purple-200)}
+.btn:active{transform:scale(0.98)}
+.btn.primary{background:var(--c-primary);border-color:var(--c-primary);color:var(--c-primary-fg)}
+.btn.primary:hover{background:var(--c-purple-600);border-color:var(--c-purple-600)}
+.btn.quiet{border-color:transparent;background:transparent;color:var(--c-purple-700)}
+.btn.quiet:hover{background:var(--c-purple-100)}
+.btn:disabled,.btn.primary:disabled{background:var(--c-bg-soft);border-color:var(--c-border);color:var(--c-fg-3);cursor:not-allowed;transform:none}
+
+/* form fields */
+.orgline select,.search,.popover textarea{border:1px solid var(--c-border-2);border-radius:var(--r-3);background:var(--c-bg-canvas);color:var(--c-ink);transition:border-color var(--dur-base) var(--ease-out)}
+.orgline select:hover,.search:hover,.popover textarea:hover{border-color:var(--c-fg-4)}
+.orgline select:focus-visible,.search:focus-visible,.popover textarea:focus-visible{border-color:var(--c-purple-700);outline-offset:1px}
+::placeholder{color:var(--c-fg-3);opacity:1}
+
+/* sign in */
+.signin{min-height:calc(100vh - var(--proto-h));display:grid;place-items:center;padding:var(--sp-6);background:var(--c-shell)}
+.signin-card{background:var(--c-bg-canvas);border-radius:var(--r-5);max-width:440px;width:100%;padding:var(--sp-8)}
+.signin-card h1{font-family:var(--font-display);font-weight:var(--fw-bold);font-size:var(--fs-32);letter-spacing:-0.011em;line-height:var(--lh-snug);margin:0 0 var(--sp-3)}
+.signin-card p{color:var(--c-fg-1);margin:0 0 var(--sp-6)}
+.signin-card .btn{width:100%;padding:13px 22px;font-size:var(--fs-18)}
+.signin-card ul{color:var(--c-fg-2);font-size:var(--fs-14);padding-left:18px;margin:var(--sp-5) 0 0}
+.signin-card li+li{margin-top:var(--sp-1)}
+
+/* project picker */
+.wrap{max-width:880px;margin:0 auto;padding:var(--sp-7) var(--sp-6) var(--sp-10)}
+.wrap h1{font-weight:var(--fw-bold);font-size:var(--fs-32);line-height:var(--lh-snug);margin:0 0 var(--sp-2)}
+.lede{color:var(--c-fg-2);margin:0 0 var(--sp-6);max-width:60ch}
+.orgline{display:flex;gap:var(--sp-3);align-items:center;margin-bottom:var(--sp-4);flex-wrap:wrap}
+.orgline select{height:40px;padding:0 var(--sp-3);max-width:100%}
+.search{flex:1;min-width:200px;height:40px;padding:0 var(--sp-3)}
+.plist{background:var(--c-bg-soft);border:1px solid var(--c-border);border-radius:var(--r-5);padding:var(--sp-2)}
+.prow{display:grid;grid-template-columns:28px 1fr auto;gap:var(--sp-3);align-items:center;padding:var(--sp-3) 14px;border-radius:14px;cursor:pointer;transition:background var(--dur-base) var(--ease-out)}
+.prow+.prow{border-top:1px solid var(--c-border)}
+.prow:hover{background:var(--c-bg-white)}
+.prow input{width:18px;height:18px;accent-color:var(--c-purple-700);margin:0}
+.prow .name{font-weight:var(--fw-bold);color:var(--c-ink)}
+.prow .meta{color:var(--c-fg-2);font-size:var(--fs-14)}
+.prow .count{color:var(--c-fg-2);font-size:var(--fs-14);text-align:right}
+.selbar{position:sticky;bottom:var(--sp-3);margin-top:var(--sp-4);background:var(--c-bg-canvas);border:1px solid var(--c-border);border-radius:var(--r-5);box-shadow:var(--shadow-2);padding:var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-5);display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap}
+.selbar .grow{flex:1;color:var(--c-fg-2);font-weight:var(--fw-medium)}
+
+/* library */
+.filters{display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-4)}
+.chip{border:1px solid var(--c-border-2);background:transparent;color:var(--c-fg-1);border-radius:var(--r-pill);padding:5px 14px;line-height:20px;font-size:var(--fs-14);font-weight:var(--fw-medium);transition:background var(--dur-base) var(--ease-out),color var(--dur-base) var(--ease-out),border-color var(--dur-base) var(--ease-out)}
+.chip:hover{background:var(--c-bg-soft)}
+.chip[aria-pressed="true"]{background:var(--c-purple-700);border-color:var(--c-purple-700);color:var(--c-on-dark)}
+table{width:100%;border-collapse:separate;border-spacing:0;background:var(--c-bg-canvas);border:1px solid var(--c-border);border-radius:var(--r-5);overflow:hidden}
+th{font-size:var(--fs-12);font-weight:var(--fw-bold);color:var(--c-fg-2);text-align:left;padding:var(--sp-3) var(--sp-4);background:var(--c-bg-soft);border-bottom:1px solid var(--c-border);letter-spacing:0.01em}
+td{padding:14px var(--sp-4);border-top:1px solid var(--c-border);vertical-align:top;color:var(--c-fg-1);font-size:var(--fs-14)}
+tbody tr:first-child td{border-top:0}
+tr.click td{transition:background var(--dur-base) var(--ease-out)}
+tr.click:hover td{background:var(--c-bg-soft);cursor:pointer}
+td .t{font-weight:var(--fw-bold);color:var(--c-ink);font-size:var(--fs-16)}
+td .sub{color:var(--c-fg-2);font-size:var(--fs-14)}
+.status{display:inline-flex;align-items:center;gap:6px;min-height:24px;font-size:var(--fs-12);font-weight:var(--fw-bold);line-height:16px;padding:4px 10px;border-radius:var(--r-pill);background:var(--c-bg-soft);border:1px solid var(--c-border);color:var(--c-ink);white-space:nowrap}
+.status::before{content:"";flex:none;width:8px;height:8px;border-radius:var(--r-pill);background:var(--c-fg-4)}
+.s-read{background:var(--c-purple-100);border-color:var(--c-purple-200);color:var(--c-purple-800)}
+.s-read::before{background:var(--c-purple-700)}
+.s-done::before{background:var(--c-success)}
+.s-wait::before{background:var(--c-accent-pink)}
+
+/* reader */
+.reader{display:grid;grid-template-columns:220px minmax(0,1fr) 240px;gap:0;max-width:1240px;margin:0 auto}
+.sections{padding:var(--sp-7) var(--sp-4) var(--sp-7) var(--sp-6);position:sticky;top:var(--proto-h);align-self:start}
+.sections h2,.rqs h2{font-size:var(--fs-14);font-weight:var(--fw-bold);color:var(--c-fg-2);margin:0 0 var(--sp-3);line-height:var(--lh-normal)}
+.sections ol{list-style:none;margin:0;padding:0;border-left:2px solid var(--c-border)}
+.sections li{padding:6px 0 6px var(--sp-3);margin-left:-2px;border-left:2px solid transparent;font-size:var(--fs-14);color:var(--c-fg-2);line-height:var(--lh-normal)}
+.sections li.done{color:var(--c-ink)}
+.sections li.here{border-left-color:var(--c-purple-700);color:var(--c-ink);font-weight:var(--fw-bold)}
+.sections li small{display:block;color:var(--c-fg-3);font-weight:var(--fw-regular);font-size:var(--fs-12)}
+.sections .hint{font-size:var(--fs-12);color:var(--c-fg-3);margin-top:var(--sp-3)}
+.page{background:var(--c-bg-canvas);border-left:1px solid var(--c-border);border-right:1px solid var(--c-border);min-height:calc(100vh - var(--proto-h) - var(--topbar-h));padding:var(--sp-7) 0 var(--sp-10)}
+.conv-head{padding:0 var(--sp-9) var(--sp-5);border-bottom:1px solid var(--c-border);display:flex;gap:var(--sp-4);align-items:flex-start}
+.conv-head h1{font-weight:var(--fw-bold);font-size:var(--fs-24);margin:0 0 var(--sp-1);line-height:var(--lh-snug)}
+.conv-head .sub{color:var(--c-fg-2);font-size:var(--fs-14)}
+.conv-head .grow{flex:1}
+.audio{display:flex;align-items:center;gap:var(--sp-3);margin:var(--sp-4) var(--sp-9) 0;padding:var(--sp-2) var(--sp-3);border-radius:var(--r-3);background:var(--c-bg-soft);font-size:var(--fs-14);color:var(--c-fg-2);font-variant-numeric:tabular-nums}
+.audio .play{flex:none;width:32px;height:32px;border-radius:var(--r-pill);border:0;background:var(--c-purple-700);color:var(--c-on-dark);font-size:var(--fs-12);transition:background var(--dur-base) var(--ease-out)}
+.audio .play:hover{background:var(--c-purple-600)}
+.audio .bar{flex:1;height:4px;background:var(--c-border-2);border-radius:var(--r-pill);position:relative}
+.audio .bar::after{content:"";position:absolute;left:0;top:0;bottom:0;width:31%;background:var(--c-purple-700);border-radius:var(--r-pill)}
+.secdiv{margin:var(--sp-7) var(--sp-9) 6px;font-size:var(--fs-14);color:var(--c-purple-700);font-weight:var(--fw-bold);display:flex;gap:10px;align-items:center}
+.secdiv::after{content:"";flex:1;height:1px;background:var(--c-border)}
+.turn{display:grid;grid-template-columns:minmax(0,1fr) 210px;gap:var(--sp-6);padding:var(--sp-3) 0 var(--sp-3) var(--sp-9)}
+.turn .who{font-size:var(--fs-14);font-weight:var(--fw-bold);color:var(--c-ink);margin-bottom:2px}
+.turn .who span{color:var(--c-fg-3);font-weight:var(--fw-regular);font-variant-numeric:tabular-nums}
+.turn p{font-size:var(--fs-18);line-height:1.65;margin:0;max-width:62ch;color:var(--c-fg-1)}
+mark{background:var(--c-purple-100);padding:1px 0;border-radius:var(--r-1);cursor:pointer;color:inherit}
+mark.star{background:var(--c-accent-mint);color:var(--c-ink);box-shadow:inset 0 -2px 0 var(--c-purple-800)}
+.margin{font-size:var(--fs-14);color:var(--c-fg-2);border-left:2px solid var(--c-purple-500);padding:2px 0 2px var(--sp-3);align-self:start;margin-right:var(--sp-5)}
+.margin b{color:var(--c-ink);font-weight:var(--fw-bold);display:block}
+.margin.empty{border:0}
+.endcard{margin:var(--sp-8) var(--sp-9) 0;border:1px solid var(--c-border);border-radius:var(--r-5);padding:var(--sp-5) var(--sp-6);display:flex;gap:var(--sp-4);align-items:center;background:var(--c-bg-soft)}
+.endcard p{margin:0;flex:1;color:var(--c-fg-1)}
+.endcard p b{color:var(--c-ink)}
+.rqs{padding:var(--sp-7) var(--sp-6) var(--sp-7) var(--sp-4);position:sticky;top:var(--proto-h);align-self:start}
+.rqs ul{list-style:none;padding:0;margin:0}
+.rqs li{font-size:var(--fs-14);color:var(--c-fg-1);padding:var(--sp-2) 0;border-top:1px solid var(--c-border);line-height:var(--lh-normal)}
+.rqs li:first-child{border-top:0}
+.rqs .edit{font-size:var(--fs-12);color:var(--c-fg-3);margin-top:var(--sp-2)}
+.popover{position:absolute;z-index:20;background:var(--c-bg-canvas);border:1px solid var(--c-border);border-radius:var(--r-4);box-shadow:var(--shadow-pop);padding:var(--sp-3);width:300px;max-width:calc(100vw - 32px)}
+.popover textarea{display:block;width:100%;padding:var(--sp-2) var(--sp-3);min-height:72px;resize:vertical}
+.popover .row{display:flex;gap:var(--sp-2);justify-content:flex-end;margin-top:var(--sp-3);align-items:center}
+.popover .row label{margin-right:auto;font-size:var(--fs-14);color:var(--c-fg-1);display:flex;gap:6px;align-items:center;cursor:pointer}
+.popover .row input{accent-color:var(--c-purple-700);width:16px;height:16px;margin:0}
+.popover .row .btn{padding:5px 12px;font-size:var(--fs-14);border-radius:var(--r-2)}
+
+/* reflect sheet */
+.sheet{position:fixed;right:var(--sp-6);bottom:var(--sp-6);width:380px;max-width:calc(100vw - 32px);background:var(--c-bg-canvas);border:1px solid var(--c-border);border-radius:var(--r-5);box-shadow:var(--shadow-pop);padding:var(--sp-6);z-index:30;display:none}
+.sheet.on{display:block}
+.sheet h2{font-weight:var(--fw-bold);font-size:var(--fs-20);line-height:var(--lh-snug);margin:0 0 var(--sp-1)}
+.sheet .sub{color:var(--c-fg-2);font-size:var(--fs-14);margin:0 0 var(--sp-4)}
+.prompts{margin:0 0 var(--sp-4);padding-left:18px;font-size:var(--fs-14);color:var(--c-fg-1)}
+.rec{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-3);background:var(--c-bg-soft)}
+.rec .dot{flex:none;width:12px;height:12px;border-radius:var(--r-pill);background:var(--c-danger)}
+.rec .time{font-variant-numeric:tabular-nums;font-weight:var(--fw-bold);color:var(--c-ink)}
+.rec .level{flex:1;min-width:0;height:18px;display:flex;gap:2px;align-items:center;overflow:hidden}
+.rec .level i{display:block;flex:none;width:3px;background:var(--c-purple-700);border-radius:var(--r-pill)}
+.sheet .actions{display:flex;gap:var(--sp-2);justify-content:flex-end;margin-top:var(--sp-4);flex-wrap:wrap}
+
+/* review */
+.review{max-width:1100px;margin:0 auto;padding:var(--sp-7) var(--sp-6) 112px}
+.review h1{font-weight:var(--fw-bold);font-size:var(--fs-28);line-height:var(--lh-snug);margin:0 0 var(--sp-2)}
+.review .lede{margin-bottom:var(--sp-6)}
+.rgrid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:var(--sp-6);align-items:start}
+.panel{background:var(--c-bg-soft);border:1px solid var(--c-border);border-radius:var(--r-5);padding:var(--sp-5) var(--sp-6)}
+.panel h2{font-size:var(--fs-16);font-weight:var(--fw-bold);line-height:var(--lh-snug);margin:0 0 var(--sp-3)}
+.panel p{color:var(--c-fg-1)}
+.said{font-size:var(--fs-16);line-height:1.65;color:var(--c-fg-1)}
+.said .sub{font-size:var(--fs-14);color:var(--c-fg-2)}
+.sugg{border:1px solid var(--c-border);border-radius:var(--r-5);padding:var(--sp-4) var(--sp-5);margin-bottom:var(--sp-3);background:var(--c-bg-canvas);transition:opacity var(--dur-base) var(--ease-out),border-color var(--dur-base) var(--ease-out)}
+.sugg.kept{border-color:var(--c-success);box-shadow:inset 4px 0 0 var(--c-success)}
+.sugg.skipped{opacity:.55}
+.sugg .rq{font-size:var(--fs-14);color:var(--c-purple-700);font-weight:var(--fw-bold);display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.sugg .insight{font-size:var(--fs-18);font-weight:var(--fw-medium);line-height:var(--lh-normal);color:var(--c-ink);margin:var(--sp-2) 0 var(--sp-3)}
+.sugg blockquote{margin:0 0 var(--sp-2);padding:var(--sp-2) var(--sp-3);border-left:3px solid var(--c-purple-700);background:var(--c-purple-100);border-radius:0 var(--r-2) var(--r-2) 0;font-size:var(--fs-14);color:var(--c-ink)}
+.sugg .why{font-size:var(--fs-14);color:var(--c-fg-2)}
+.fit{display:inline-flex;align-items:center;font-size:var(--fs-12);line-height:16px;padding:4px 10px;border-radius:var(--r-pill);background:var(--c-purple-100);color:var(--c-purple-700);font-weight:var(--fw-bold);margin-left:0}
+.sugg .acts{display:flex;gap:var(--sp-2);margin-top:var(--sp-3);flex-wrap:wrap}
+.sugg .acts .btn{padding:5px 12px;font-size:var(--fs-14);border-radius:var(--r-2)}
+.stickyfoot{position:fixed;left:0;right:0;bottom:0;background:var(--c-bg-canvas);border-top:1px solid var(--c-border);padding:var(--sp-3) var(--sp-6);display:flex;gap:var(--sp-3);align-items:center;justify-content:flex-end;flex-wrap:wrap;z-index:10}
+.stickyfoot .grow{flex:1;color:var(--c-fg-2);font-weight:var(--fw-medium);max-width:1052px;margin:0 auto}
+.toast{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);max-width:calc(100vw - 32px);background:var(--c-ink);color:var(--c-on-dark);border-radius:var(--r-pill);padding:var(--sp-3) var(--sp-5);font-size:var(--fs-14);display:none;gap:var(--sp-4);align-items:center;z-index:60;box-shadow:var(--shadow-pop)}
+.toast.on{display:flex}
+.toast a{color:var(--c-accent-mint);font-weight:var(--fw-bold);white-space:nowrap}
+
+/* memo */
+.memo{display:grid;grid-template-columns:260px minmax(0,1fr);max-width:1140px;margin:0 auto;gap:var(--sp-7);padding:var(--sp-7) var(--sp-6) var(--sp-10)}
+.memo main h1{line-height:var(--lh-snug)}
+.qside h2{font-size:var(--fs-14);font-weight:var(--fw-bold);color:var(--c-fg-2);margin:0 0 var(--sp-2);line-height:var(--lh-normal)}
+.qside ul{list-style:none;padding:0;margin:0 0 var(--sp-4)}
+.qside li+li{margin-top:2px}
+.qside li button{width:100%;text-align:left;border:0;background:transparent;color:var(--c-fg-1);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-3);display:flex;gap:var(--sp-2);align-items:baseline;font-size:var(--fs-14);line-height:var(--lh-normal);transition:background var(--dur-base) var(--ease-out)}
+.qside li button:hover{background:var(--c-bg-soft)}
+.qside li button[aria-current="true"]{background:var(--c-purple-100);color:var(--c-purple-800);font-weight:var(--fw-bold)}
+.qside li .n{margin-left:auto;color:var(--c-fg-2);font-size:var(--fs-12);font-weight:var(--fw-medium);font-variant-numeric:tabular-nums}
+.qside .focusnote{font-size:var(--fs-12);color:var(--c-fg-2);padding:0 var(--sp-3)}
+.qside .entry b{color:var(--c-ink)}
+.tabs{display:flex;gap:var(--sp-1);border-bottom:1px solid var(--c-border);margin:var(--sp-4) 0 var(--sp-5)}
+.tabs button{border:0;background:transparent;padding:var(--sp-2) var(--sp-3);color:var(--c-fg-2);font-weight:var(--fw-medium);font-size:var(--fs-16);border-bottom:2px solid transparent;margin-bottom:-1px;transition:color var(--dur-base) var(--ease-out)}
+.tabs button:hover{color:var(--c-ink)}
+.tabs button[aria-selected="true"]{color:var(--c-ink);font-weight:var(--fw-bold);border-bottom-color:var(--c-purple-700)}
+.entry{background:var(--c-bg-soft);border:1px solid var(--c-border);border-radius:var(--r-5);padding:var(--sp-4) var(--sp-5);margin-bottom:var(--sp-3)}
+.entry .insight{font-size:var(--fs-18);font-weight:var(--fw-medium);line-height:var(--lh-normal);color:var(--c-ink);margin:0 0 var(--sp-2)}
+.entry blockquote{margin:0 0 6px;padding:var(--sp-1) var(--sp-3);border-left:3px solid var(--c-purple-700);font-size:var(--fs-14);color:var(--c-fg-1)}
+.entry .foot{display:flex;gap:var(--sp-3);align-items:center;font-size:var(--fs-14);color:var(--c-fg-2);margin-top:var(--sp-3);flex-wrap:wrap}
+.entry .foot .grow{flex:1}
+.entry .foot .btn{font-size:var(--fs-14)}
+.tag{display:inline-flex;align-items:center;font-size:var(--fs-12);line-height:16px;font-weight:var(--fw-medium);padding:4px 10px;border-radius:var(--r-pill);background:var(--c-purple-100);color:var(--c-purple-800)}
+.more{border:0;background:transparent;color:var(--c-fg-2);font-size:var(--fs-18);line-height:1;width:32px;height:32px;padding:0;border-radius:var(--r-pill);transition:background var(--dur-base) var(--ease-out)}
+.more:hover{background:var(--c-purple-100);color:var(--c-purple-700)}
+.unused{border:1px dashed var(--c-border-2);border-radius:var(--r-5);padding:var(--sp-4) var(--sp-5);color:var(--c-fg-2);font-size:var(--fs-14)}
+.unused b{color:var(--c-ink)}
+
+/* design notes drawer */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:340px;max-width:100vw;background:var(--c-purple-900);color:var(--c-on-dark);padding:calc(var(--proto-h) + var(--sp-5)) var(--sp-6) var(--sp-5);overflow:auto;z-index:45;transform:translateX(100%);visibility:hidden;transition:transform var(--dur-slow) var(--ease-out),visibility 0s linear var(--dur-slow)}
+.drawer.on{transform:none;visibility:visible;transition:transform var(--dur-slow) var(--ease-out),visibility 0s}
+.drawer h2{font-size:var(--fs-18);font-weight:var(--fw-bold);color:var(--c-on-dark);margin:0 0 var(--sp-1)}
+.drawer p.sub{color:var(--c-on-dark-2);font-size:var(--fs-14);margin:0 0 var(--sp-4)}
+.drawer ul{padding-left:18px;margin:0;font-size:var(--fs-14);line-height:var(--lh-normal)}
+.drawer li{margin-bottom:var(--sp-3)}
+.drawer li em{color:var(--c-on-dark-2);font-style:normal;display:block;font-size:var(--fs-12);margin-top:2px}
+
+@media (max-width:1000px){
+  :root{--proto-h:88px}
+  .proto .spacer{flex:0 0 100%;height:0}
+}
+@media (max-width:780px){
+  :root{--proto-h:124px}
+}
+@media (max-width:960px){
+  .reader{grid-template-columns:1fr}
+  .sections,.rqs{position:static;padding:var(--sp-4)}
+  .turn{grid-template-columns:1fr;gap:0;padding:var(--sp-2) var(--sp-4)}
+  .conv-head,.audio,.secdiv,.endcard{margin-left:var(--sp-4);margin-right:var(--sp-4)}
+  .conv-head{padding:0 0 var(--sp-4)}
+  .margin{margin:var(--sp-2) 0 0}
+  .page{border-left:0;border-right:0;border-top:1px solid var(--c-border);border-bottom:1px solid var(--c-border);min-height:0}
+  .rgrid,.memo{grid-template-columns:1fr}
+  .appbar{gap:var(--sp-3);padding:0 var(--sp-4);overflow-x:auto}
+  .bundle{display:none}
+}
+@media (max-width:640px){
+  :root{--proto-h:118px}
+  .proto{padding:6px var(--sp-3);gap:var(--sp-1);font-size:var(--fs-12);line-height:18px}
+  .proto button{padding:3px 10px}
+  .appbar{gap:var(--sp-2)}
+  .brand{font-size:var(--fs-16);white-space:normal}
+  .nav{margin-left:0;gap:0}
+  .nav a{padding:0 var(--sp-2)}
+  .signin{padding:var(--sp-4)}
+  .signin-card{padding:var(--sp-6)}
+  .signin-card h1,.wrap h1{font-size:var(--fs-28)}
+  .wrap,.review{padding-left:var(--sp-4);padding-right:var(--sp-4)}
+  .memo{padding:var(--sp-6) var(--sp-4) var(--sp-10);gap:var(--sp-6)}
+  .review h1{font-size:var(--fs-24)}
+  .search{min-width:0;width:100%}
+  .orgline select{width:100%}
+  .prow{grid-template-columns:24px 1fr;padding:var(--sp-3)}
+  .prow .count{grid-column:2;text-align:left;margin-top:-6px}
+  .selbar .btn{flex:1 1 auto}
+  table,tbody,tr,td{display:block}
+  thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  tbody tr{border-top:1px solid var(--c-border);padding:var(--sp-3) var(--sp-4)}
+  tbody tr:first-child{border-top:0}
+  td,tbody tr:first-child td{border-top:0;padding:0}
+  tr.click:hover td{background:transparent}
+  tr.click:hover{background:var(--c-bg-soft);cursor:pointer}
+  td:nth-child(2),td:nth-child(3){display:inline;color:var(--c-fg-2)}
+  td:nth-child(3)::before{content:" \00B7  "}
+  td:nth-child(4){margin-top:var(--sp-2)}
+  .turn p{font-size:var(--fs-16)}
+  .conv-head{flex-wrap:wrap}
+  .conv-head .grow{flex:1 1 100%}
+  /* the script positions the popover at the selection, which can run off a phone screen, so pin it to the bottom instead */
+  .popover{position:fixed;left:var(--sp-4)!important;right:var(--sp-4);top:auto!important;bottom:var(--sp-4);width:auto;max-width:none;z-index:40}
+  .endcard{flex-direction:column;align-items:stretch;padding:var(--sp-4)}
+  .sheet{right:var(--sp-4);bottom:var(--sp-4);padding:var(--sp-5)}
+  .stickyfoot{padding:var(--sp-3) var(--sp-4);gap:var(--sp-2)}
+  .stickyfoot .grow{flex-basis:100%}
+  .review{padding-bottom:160px}
+  .toast{bottom:136px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="proto" role="navigation" aria-label="Mock screens">
+  <strong>Mock A: cleanup pass</strong>
+  <button data-go="signin">1 Sign in</button>
+  <button data-go="projects">2 Projects</button>
+  <button data-go="library">3 Conversations</button>
+  <button data-go="reader">4 Reader</button>
+  <button data-go="review">5 Review</button>
+  <button data-go="memo">6 Memo</button>
+  <span class="spacer"></span>
+  <button class="notes-toggle" id="notesBtn" aria-expanded="false">What changed on this screen</button>
+</div>
+
+<!-- 1 SIGN IN -->
+<section class="screen" id="signin" data-notes="signin">
+  <div class="signin">
+    <div class="signin-card">
+      <h1>Notes in the Margin</h1>
+      <p>Read conversations closely, note what stands out, and build a memo around your research questions.</p>
+      <button class="btn primary" data-go="projects">Sign in with Cortico</button>
+      <ul>
+        <li>You'll see only the projects your Cortico account can open.</li>
+        <li>Your notes and memo stay in this app. Nothing is written back to Cortico.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 2 PROJECTS -->
+<section class="screen" id="projects" data-notes="projects">
+  <div class="appbar">
+    <span class="brand">Notes in the Margin</span>
+    <span class="grow"></span>
+    <span class="avatar" title="Signed in as Harrison">HS</span>
+  </div>
+  <div class="wrap">
+    <h1>Choose what you'll listen to</h1>
+    <p class="lede">Pick one project, or several to read across them together. You can change this any time from the top bar.</p>
+    <div class="orgline">
+      <select aria-label="Organization">
+        <option>American Conversation Project</option>
+        <option>Real Talk for Change</option>
+      </select>
+      <input class="search" type="search" placeholder="Search projects" aria-label="Search projects">
+    </div>
+    <div class="plist" id="plist">
+      <label class="prow"><input type="checkbox" checked><span><span class="name">Main Street listening circles</span><br><span class="meta">Conversation guide: Belonging and trust, v3</span></span><span class="count">42 conversations</span></label>
+      <label class="prow"><input type="checkbox" checked><span><span class="name">Rural libraries series</span><br><span class="meta">Conversation guide: Belonging and trust, v3</span></span><span class="count">18 conversations</span></label>
+      <label class="prow"><input type="checkbox"><span><span class="name">Veterans coming home</span><br><span class="meta">Conversation guide: Service and return</span></span><span class="count">27 conversations</span></label>
+      <label class="prow"><input type="checkbox" checked><span><span class="name">Faith communities pilot</span><br><span class="meta">Conversation guide: Belonging and trust, v2</span></span><span class="count">11 conversations</span></label>
+      <label class="prow"><input type="checkbox"><span><span class="name">Youth voices, summer cohort</span><br><span class="meta">No conversation guide</span></span><span class="count">35 conversations</span></label>
+    </div>
+    <div class="selbar">
+      <span class="grow" id="selcount">3 projects, 71 conversations</span>
+      <button class="btn primary" data-go="library">Open conversations</button>
+    </div>
+  </div>
+</section>
+
+<!-- shared top bar is repeated per screen for a static mock -->
+<template id="appbarTpl">
+  <div class="appbar">
+    <span class="brand">Notes in the Margin</span>
+    <button class="bundle" data-go="projects" title="Change projects"><b>3 projects</b> in American Conversation Project</button>
+    <nav class="nav">
+      <a href="#" data-go="library" data-nav="library">Conversations</a>
+      <a href="#" data-go="memo" data-nav="memo">Memo</a>
+    </nav>
+    <span class="grow"></span>
+    <span class="avatar" title="Signed in as Harrison">HS</span>
+  </div>
+</template>
+
+<!-- 3 LIBRARY -->
+<section class="screen" id="library" data-notes="library">
+  <div data-appbar="library"></div>
+  <div class="wrap" style="max-width:1040px">
+    <h1>Conversations</h1>
+    <p class="lede">71 conversations across Main Street listening circles, Rural libraries series and Faith communities pilot.</p>
+    <div class="orgline">
+      <input class="search" type="search" placeholder="Search titles, places, or speakers" aria-label="Search conversations">
+    </div>
+    <div class="filters" role="group" aria-label="Filter by status">
+      <button class="chip" aria-pressed="true">All</button>
+      <button class="chip" aria-pressed="false">Not started (58)</button>
+      <button class="chip" aria-pressed="false">In progress (6)</button>
+      <button class="chip" aria-pressed="false">Needs review (2)</button>
+      <button class="chip" aria-pressed="false">Reflected (5)</button>
+    </div>
+    <table>
+      <thead><tr><th>Conversation</th><th>Project</th><th>Length</th><th>Your progress</th></tr></thead>
+      <tbody>
+        <tr class="click" data-go="reader"><td><div class="t">Library board neighbors, Cedar Falls</div><div class="sub">Oct 14, 2026, 6 participants</div></td><td>Rural libraries series</td><td>58 min</td><td><span class="status s-read">Reading, 31%</span></td></tr>
+        <tr class="click" data-go="review"><td><div class="t">Thursday coffee group</div><div class="sub">Oct 9, 2026, 5 participants</div></td><td>Main Street listening circles</td><td>47 min</td><td><span class="status s-wait">Reflection needs review</span></td></tr>
+        <tr class="click" data-go="reader"><td><div class="t">After the mill closed</div><div class="sub">Oct 2, 2026, 4 participants</div></td><td>Main Street listening circles</td><td>1 h 12 min</td><td><span class="status s-done">Reflected</span></td></tr>
+        <tr class="click" data-go="reader"><td><div class="t">Sunday supper, St. Brigid's hall</div><div class="sub">Sep 28, 2026, 7 participants</div></td><td>Faith communities pilot</td><td>63 min</td><td><span class="status s-new">Not started</span></td></tr>
+        <tr class="click" data-go="reader"><td><div class="t">Bookmobile volunteers</div><div class="sub">Sep 21, 2026, 3 participants</div></td><td>Rural libraries series</td><td>39 min</td><td><span class="status s-new">Not started</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 4 READER -->
+<section class="screen" id="reader" data-notes="reader">
+  <div data-appbar="library"></div>
+  <div class="reader">
+    <aside class="sections" aria-label="Conversation guide sections">
+      <h2>Guide sections</h2>
+      <ol>
+        <li class="done">Introductions<small>Starts at Ruth, 0:00</small></li>
+        <li class="here">A place you feel known<small>Starts at Dale, 6:40</small></li>
+        <li>When trust was broken<small><button class="btn quiet" style="padding:0;font-size:var(--fs-12)" id="markBtn">Mark where this starts</button></small></li>
+        <li>What you'd change</li>
+      </ol>
+      <p class="hint">Marking sections is optional. It helps you jump around later.</p>
+    </aside>
+
+    <article class="page" id="page">
+      <div class="conv-head">
+        <div class="grow">
+          <h1>Library board neighbors, Cedar Falls</h1>
+          <div class="sub">Rural libraries series, Oct 14, 2026, 58 min</div>
+        </div>
+        <button class="btn primary" id="reflectBtn">Reflect</button>
+      </div>
+      <div class="audio"><button class="play" aria-label="Play">▶</button><span>18:02</span><span class="bar"></span><span>58:10</span><button class="btn quiet" style="padding:2px 6px;font-size:var(--fs-14)">1.5×</button></div>
+
+      <div class="secdiv">A place you feel known</div>
+      <div class="turn">
+        <div><div class="who">Dale <span>6:40</span></div>
+        <p>When I walk into the library, Marcy knows my name before I'm through the door. <mark class="star" data-note="1">She knows I'm going to ask about the seed catalog and she's already pulled it.</mark> That's not nothing. That's the only place in town that happens anymore.</p></div>
+        <div class="margin"><b>★ Being known by name</b>Same phrasing as the coffee group. Recurring?</div>
+      </div>
+      <div class="turn">
+        <div><div class="who">Ruth <span>7:12</span></div>
+        <p>It used to be the bank, too. You'd go in and Gene would ask about your mother. <mark data-note="2">Now it's a screen and a phone number that goes to Omaha.</mark></p></div>
+        <div class="margin"><b>Institutions moving away</b></div>
+      </div>
+      <div class="turn">
+        <div><div class="who">Facilitator <span>7:40</span></div>
+        <p>What does it feel like when that changes, when the person behind the counter isn't from here?</p></div>
+        <div class="margin empty"></div>
+      </div>
+      <div class="turn">
+        <div><div class="who">Marisol <span>8:05</span></div>
+        <p>Honestly, it feels like they decided we weren't worth a person. I moved here eleven years ago and the library was how I met anyone. If they cut the hours again, I don't know where people like me would go.</p></div>
+        <div class="margin empty"></div>
+      </div>
+
+      <div class="secdiv" style="color:var(--c-fg-3)">When trust was broken <span style="font-weight:var(--fw-regular)">(not marked yet)</span></div>
+      <div class="turn">
+        <div><div class="who">Dale <span>14:22</span></div>
+        <p>The board vote was the thing. They held it at two in the afternoon on a Tuesday. Who can come to that? Farmers can't. Anybody with a shift can't.</p></div>
+        <div class="margin empty"></div>
+      </div>
+
+      <div class="endcard">
+        <p><b>You've reached the end.</b> Record a few minutes on what stood out while it's fresh.</p>
+        <button class="btn primary" data-open-reflect>Reflect on this conversation</button>
+      </div>
+    </article>
+
+    <aside class="rqs" aria-label="Research questions">
+      <h2>Your research questions</h2>
+      <ul>
+        <li>How do people describe trust in local institutions?</li>
+        <li>What does belonging to this community feel like?</li>
+        <li>Where do people feel friction or disconnection?</li>
+      </ul>
+      <p class="edit">Edit these on the <a href="#" data-go="memo">Memo</a> page.</p>
+      <h2 style="margin-top:var(--sp-6)">In this conversation</h2>
+      <p style="font-size:var(--fs-14);color:var(--c-fg-2);margin:0">2 highlights, 1 starred. Select any passage to highlight it. Click a highlight to star it.</p>
+    </aside>
+  </div>
+
+  <div class="popover" id="popover" hidden>
+    <textarea placeholder="Add a note (optional)" aria-label="Note"></textarea>
+    <div class="row"><label><input type="checkbox"> Star</label><button class="btn quiet" id="popCancel">Cancel</button><button class="btn primary" id="popSave">Highlight</button></div>
+  </div>
+
+  <div class="sheet" id="sheet" role="dialog" aria-label="Record a reflection">
+    <h2>Reflect on this conversation</h2>
+    <p class="sub">Talk it through. You can keep reading while you record.</p>
+    <ol class="prompts">
+      <li>What surprised you?</li>
+      <li>What connects to your research questions?</li>
+      <li>What would you want to hear more about?</li>
+    </ol>
+    <div class="rec"><span class="dot"></span><span class="time">2:14</span><span class="level" id="level"></span><span style="color:var(--c-fg-2);font-size:var(--fs-14)">of 20:00</span></div>
+    <div class="actions">
+      <button class="btn quiet" id="sheetCancel">Discard</button>
+      <button class="btn">Pause</button>
+      <button class="btn primary" data-go="review">Finish and review</button>
+    </div>
+  </div>
+</section>
+
+<!-- 5 REVIEW -->
+<section class="screen" id="review" data-notes="review">
+  <div data-appbar="library"></div>
+  <div class="review">
+    <h1>Review your reflection</h1>
+    <p class="lede">Keep the connections that ring true, edit the ones that are close, and skip the rest. Only what you keep goes into your memo.</p>
+    <div class="rgrid">
+      <div class="panel">
+        <h2>What you said</h2>
+        <div class="said"><div class="sub">Thursday coffee group, recorded Oct 9, 3:42</div>
+        <p>The thing that keeps coming back is people saying someone "knows them." The library, the diner. It's less about the service and more about being recognized. And then the flip side, the board meeting at 2pm, that felt like the clearest example of trust breaking. Not a scandal, just a time nobody could make.</p>
+        <button class="btn quiet" style="padding:0;font-size:var(--fs-14)">Fix transcription</button></div>
+      </div>
+      <div>
+        <div class="sugg" data-s>
+          <div class="rq">Belonging <span class="fit">Strong fit</span></div>
+          <div class="insight">Belonging is described as being recognized by name, more than as access to services.</div>
+          <blockquote>"Marcy knows my name before I'm through the door." <span class="sub" style="color:var(--c-fg-2)">Your highlight</span></blockquote>
+          <div class="why">You said "it's less about the service and more about being recognized."</div>
+          <div class="acts"><button class="btn" data-keep>Keep</button><button class="btn">Edit</button><button class="btn quiet" data-skip>Skip</button></div>
+        </div>
+        <div class="sugg" data-s>
+          <div class="rq">Trust in local institutions <span class="fit">Strong fit</span></div>
+          <div class="insight">Trust erodes through access decisions, like meeting times, not through scandal.</div>
+          <blockquote>"They held it at two in the afternoon on a Tuesday. Who can come to that?" <span style="color:var(--c-fg-2)">Suggested passage</span></blockquote>
+          <div class="acts"><button class="btn" data-keep>Keep</button><button class="btn">Edit</button><button class="btn quiet" data-skip>Skip</button></div>
+        </div>
+        <div class="sugg" data-s>
+          <div class="rq">Doesn't fit a question yet</div>
+          <div class="insight">Diners and libraries play similar roles as places of recognition.</div>
+          <div class="acts"><button class="btn" data-keep>Keep</button><button class="btn">Edit</button><button class="btn quiet" data-skip>Skip</button></div>
+        </div>
+        <div class="panel" style="margin-top:var(--sp-2)">
+          <h2>Starred passages not used above</h2>
+          <p style="margin:0 0 var(--sp-2);font-size:var(--fs-14)">"Now it's a screen and a phone number that goes to Omaha."</p>
+          <select aria-label="Add to research question" style="border:1px solid var(--c-border-2);border-radius:var(--r-3);padding:0 var(--sp-3);height:36px;max-width:100%;background:var(--c-bg-canvas)"><option>Save for later</option><option>Add under Trust in local institutions</option><option>Add under Belonging</option></select>
+        </div>
+        <button class="btn quiet" style="margin-top:var(--sp-3)">+ Add something the AI missed</button>
+      </div>
+    </div>
+  </div>
+  <div class="stickyfoot">
+    <span class="grow" id="reviewCount">3 to decide</span>
+    <button class="btn quiet" data-go="reader">Finish later</button>
+    <button class="btn primary" id="fileBtn">Add 0 to memo</button>
+  </div>
+  <div class="toast" id="toast"><span>Added to your memo.</span><a href="#" data-go="memo">View memo</a></div>
+</section>
+
+<!-- 6 MEMO -->
+<section class="screen" id="memo" data-notes="memo">
+  <div data-appbar="memo"></div>
+  <div class="memo">
+    <aside class="qside">
+      <h2>Research questions</h2>
+      <ul>
+        <li><button aria-current="true">Trust in local institutions<span class="n">9</span></button></li>
+        <li><button>Belonging<span class="n">12</span></button></li>
+        <li><button>Friction and disconnection<span class="n">4</span></button></li>
+        <li><button style="color:var(--c-fg-2)">Doesn't fit a question yet<span class="n">3</span></button></li>
+      </ul>
+      <p class="focusnote">Focus 5 to 7 questions when you're ready to build a codebook.</p>
+      <button class="btn quiet" style="font-size:var(--fs-14)">+ Add a research question</button>
+      <h2 style="margin-top:var(--sp-6)">Listen next</h2>
+      <div class="entry" style="padding:var(--sp-3) var(--sp-4)">
+        <div style="font-size:var(--fs-14)"><b>Sunday supper, St. Brigid's hall</b></div>
+        <div style="font-size:var(--fs-14);color:var(--c-fg-2)">Others describe the parish hall the way Dale describes the library.</div>
+        <div style="margin-top:var(--sp-2)"><button class="btn" style="padding:4px 10px;font-size:var(--fs-14)" data-go="reader">Open</button> <button class="btn quiet" style="padding:4px 6px;font-size:var(--fs-14)">Not useful</button></div>
+      </div>
+    </aside>
+    <main>
+      <h1 style="font-weight:var(--fw-bold);font-size:var(--fs-28);margin:0">Trust in local institutions</h1>
+      <p style="color:var(--c-fg-2);margin:var(--sp-1) 0 0">How do people describe trust in local institutions? <button class="btn quiet" style="padding:0 4px;font-size:var(--fs-14)">Edit</button></p>
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="ins">Insights (9)</button>
+        <button role="tab" aria-selected="false" data-tab="th">Themes (3)</button>
+      </div>
+      <div data-panel="ins">
+        <div class="entry">
+          <p class="insight">Trust erodes through access decisions, like meeting times, not through scandal.</p>
+          <blockquote>"They held it at two in the afternoon on a Tuesday. Who can come to that?"</blockquote>
+          <div class="foot"><a href="#" data-go="reader">Library board neighbors</a><span>Oct 14</span><span class="tag">Access and exclusion</span><span class="grow"></span><button class="more" aria-label="More actions">⋯</button></div>
+        </div>
+        <div class="entry">
+          <p class="insight">When institutions centralize, people read it as a judgment that the town isn't worth a person.</p>
+          <blockquote>"It feels like they decided we weren't worth a person."</blockquote>
+          <blockquote>"Now it's a screen and a phone number that goes to Omaha."</blockquote>
+          <div class="foot"><a href="#" data-go="reader">Library board neighbors</a><span>Oct 14</span><span class="tag">Institutions leaving</span><span class="grow"></span><button class="more" aria-label="More actions">⋯</button></div>
+        </div>
+        <div class="unused"><b>2 starred passages</b> from these conversations aren't in any insight yet. <a href="#">Review them</a></div>
+      </div>
+      <div data-panel="th" hidden>
+        <div class="entry"><p class="insight">Access and exclusion</p><div style="color:var(--c-fg-2);font-size:var(--fs-14)">Decisions about when and where things happen that leave people out.</div><div class="foot"><span>4 insights</span><span class="grow"></span><button class="btn" style="padding:4px 10px;font-size:var(--fs-14)">★ In codebook</button></div></div>
+        <div class="entry"><p class="insight">Institutions leaving</p><div style="color:var(--c-fg-2);font-size:var(--fs-14)">Local people replaced by remote systems.</div><div class="foot"><span>3 insights</span><span class="grow"></span><button class="btn" style="padding:4px 10px;font-size:var(--fs-14)">☆ Add to codebook</button></div></div>
+        <div class="entry" style="border-style:dashed"><p class="insight">Suggested: Volunteers as the last local layer</p><div style="color:var(--c-fg-2);font-size:var(--fs-14)">2 insights. Suggested by AI from your insights.</div><div class="foot"><span class="grow"></span><button class="btn">Keep</button><button class="btn quiet">Dismiss</button></div></div>
+        <button class="btn quiet">Suggest themes from these insights</button>
+      </div>
+    </main>
+  </div>
+</section>
+
+<aside class="drawer" id="drawer" aria-label="What changed">
+  <div id="drawerBody"></div>
+</aside>
+
+<script>
+const NOTES = {
+  signin:{t:"Sign in",s:"New screen. Today the app has no sign-in and every action runs as user 101.",i:[
+    ["One button that sends people to Cortico's sign-in","Replaces the hard-coded user id and the local copy of Cortico's database."],
+    ["Two plain lines on what access means","Answers the first question a researcher will have: will this change anything in Cortico?"]]},
+  projects:{t:"Projects",s:"New screen. Today the app reads all 201 conversations with no project filter.",i:[
+    ["Organization picker, then a list of its projects","Only projects the signed-in account can open appear."],
+    ["Checkboxes, so several projects can be bundled","The same pattern can carry over to llm-auto-highlighter for American Conversation Project."],
+    ["A running count of projects and conversations","Shows the size of what you are about to open before you open it."]]},
+  library:{t:"Conversations",s:"Replaces the 201-item dropdown in the Reader toolbar.",i:[
+    ["Search, plus a filter by your progress","Today there is no search and no way to see what you have already read or reflected on."],
+    ["\"Reflection needs review\" lives here","Replaces the orange banner at the top of the Reader."],
+    ["No \"(#id)\" in titles","Internal ids are hidden."],
+    ["The top bar always shows the current project bundle","Click it to change projects."]]},
+  reader:{t:"Reader",s:"Same reading flow, about half the controls.",i:[
+    ["Guide sections are a visible list on the left","Replaces the invisible 14px hover strip. Section breaks also appear inline in the transcript."],
+    ["Margin notes sit beside the passage","Uses the margin the app is named for."],
+    ["Research questions are read-only here","Editing moved to the Memo page, so the Reader stays about reading. The Memo tab in the side panel is gone."],
+    ["One way to start a reflection, plus the end-of-transcript card, placed at the end","The card moved from the top of the column to where you finish reading."],
+    ["The highlight popover says what clicking a highlight does","Star is a checkbox at the moment of highlighting. A hint explains click-to-star."],
+    ["Reflect opens a small panel that doesn't cover the transcript","Try it with the Reflect button."]]},
+  review:{t:"Review",s:"Same decisions, clearer language and visible consequences.",i:[
+    ["Keep, Edit and Skip replace Accept, Edit and Reject","The footer counts what is left to decide, so nothing silently stays undecided."],
+    ["\"Strong fit\" replaces raw confidence numbers","The reason quotes what you said."],
+    ["\"Doesn't fit a question yet\" replaces \"Unmapped\"",""],
+    ["The button names its result: \"Add 2 to memo\"","Then a confirmation with a link to the memo. Today the dialog just closes."],
+    ["\"Finish later\" replaces a Close that threw away choices",""]]},
+  memo:{t:"Memo",s:"Merges today's Memo and Organize pages into one place.",i:[
+    ["Research questions on the left, one at a time","Editing, focusing and adding questions all happen here, not in three places."],
+    ["Insights and Themes tabs","\"Code families\" are called themes. Synthesis, merging and the codebook star are in one place."],
+    ["Retract, remove evidence and the rest move into the ⋯ menu","Each entry shows one row of actions instead of five or more."],
+    ["One name for unused starred passages","Today the same thing has three labels on three screens."],
+    ["Listen next sits in the sidebar","\"Not useful\" replaces an Accept that did nothing visible."]]}
+};
+const screens=[...document.querySelectorAll('.screen')];
+const tpl=document.getElementById('appbarTpl');
+document.querySelectorAll('[data-appbar]').forEach(el=>{
+  const n=tpl.content.cloneNode(true);
+  n.querySelectorAll('[data-nav]').forEach(a=>{ if(a.dataset.nav===el.dataset.appbar) a.setAttribute('aria-current','page'); });
+  el.replaceWith(n);
+});
+let current='signin';
+function go(id){
+  current=id;
+  screens.forEach(s=>s.classList.toggle('on',s.id===id));
+  document.querySelectorAll('.proto [data-go]').forEach(b=>b.setAttribute('aria-current',b.dataset.go===id));
+  document.getElementById('sheet').classList.remove('on');
+  renderNotes(); window.scrollTo(0,0);
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-go]');
+  if(t){e.preventDefault();go(t.dataset.go);}
+});
+const drawer=document.getElementById('drawer'), notesBtn=document.getElementById('notesBtn');
+notesBtn.onclick=()=>{const on=!drawer.classList.contains('on');drawer.classList.toggle('on',on);notesBtn.setAttribute('aria-expanded',on);};
+function renderNotes(){
+  const n=NOTES[current];
+  document.getElementById('drawerBody').innerHTML=`<h2>${n.t}</h2><p class="sub">${n.s}</p><ul>${n.i.map(([a,b])=>`<li>${a}${b?`<em>${b}</em>`:''}</li>`).join('')}</ul>`;
+}
+
+/* projects count */
+document.getElementById('plist').addEventListener('change',()=>{
+  const rows=[...document.querySelectorAll('#plist .prow')].filter(r=>r.querySelector('input').checked);
+  const c=rows.reduce((a,r)=>a+parseInt(r.querySelector('.count').textContent),0);
+  document.getElementById('selcount').textContent=`${rows.length} project${rows.length===1?'':'s'}, ${c} conversations`;
+});
+/* chips */
+document.querySelectorAll('.filters .chip').forEach(c=>c.onclick=()=>{document.querySelectorAll('.filters .chip').forEach(x=>x.setAttribute('aria-pressed',x===c));});
+
+/* reader: star toggle, highlight popover, reflect sheet */
+document.querySelectorAll('#page mark').forEach(m=>m.onclick=()=>m.classList.toggle('star'));
+const pop=document.getElementById('popover');
+document.getElementById('page').addEventListener('mouseup',e=>{
+  const sel=window.getSelection(); if(!sel||sel.isCollapsed||e.target.closest('mark')) return;
+  const r=sel.getRangeAt(0); if(!r.commonAncestorContainer.parentElement.closest('.turn p')) return;
+  const b=r.getBoundingClientRect();
+  pop.style.left=(b.left+window.scrollX)+'px'; pop.style.top=(b.bottom+window.scrollY+8)+'px'; pop.hidden=false;
+  pop._range=r.cloneRange(); pop.querySelector('textarea').focus();
+});
+document.getElementById('popCancel').onclick=()=>{pop.hidden=true;};
+document.getElementById('popSave').onclick=()=>{
+  try{const m=document.createElement('mark'); if(pop.querySelector('input').checked) m.className='star'; pop._range.surroundContents(m); m.onclick=()=>m.classList.toggle('star');}catch(_){}
+  pop.hidden=true; window.getSelection().removeAllRanges();
+};
+const sheet=document.getElementById('sheet');
+document.getElementById('reflectBtn').onclick=()=>sheet.classList.add('on');
+document.querySelectorAll('[data-open-reflect]').forEach(b=>b.onclick=()=>sheet.classList.add('on'));
+document.getElementById('sheetCancel').onclick=()=>sheet.classList.remove('on');
+const lvl=document.getElementById('level');
+for(let i=0;i<40;i++){const b=document.createElement('i');b.style.height=(4+Math.round(Math.abs(Math.sin(i*1.7))*14))+'px';lvl.appendChild(b);}
+document.getElementById('markBtn').onclick=e=>{e.target.closest('li').innerHTML='When trust was broken<small>Starts at Dale, 14:22</small>';e.target.closest('li')?.classList.add('done');};
+
+/* review */
+function updateReview(){
+  const s=[...document.querySelectorAll('[data-s]')];
+  const kept=s.filter(x=>x.classList.contains('kept')).length;
+  const left=s.filter(x=>!x.classList.contains('kept')&&!x.classList.contains('skipped')).length;
+  document.getElementById('reviewCount').textContent=left?`${left} still to decide, ${kept} kept`:`All decided, ${kept} kept`;
+  const f=document.getElementById('fileBtn'); f.textContent=`Add ${kept} to memo`; f.disabled=kept===0;
+}
+document.querySelectorAll('[data-s]').forEach(c=>{
+  c.querySelector('[data-keep]').onclick=()=>{c.classList.add('kept');c.classList.remove('skipped');updateReview();};
+  c.querySelector('[data-skip]').onclick=()=>{c.classList.add('skipped');c.classList.remove('kept');updateReview();};
+});
+updateReview();
+document.getElementById('fileBtn').onclick=()=>{const t=document.getElementById('toast');t.classList.add('on');setTimeout(()=>t.classList.remove('on'),4000);};
+
+/* memo tabs */
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('[data-tab]').forEach(x=>x.setAttribute('aria-selected',x===b));
+  document.querySelectorAll('[data-panel]').forEach(p=>p.hidden=p.dataset.panel!==b.dataset.tab);
+});
+go('signin');
+</script>
+</body>
+</html>

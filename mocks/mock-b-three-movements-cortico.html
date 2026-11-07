@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notes in the Margin, mock B</title>
+<link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+<link rel="preconnect" href="https://cdn.fontshare.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@700&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap" rel="stylesheet">
+<style>
+/* Cortico Design System tokens (Facilitator-Dashboard/Cortico Design System/colors_and_type.css) */
+:root{
+  --c-purple-900:#11112B;
+  --c-purple-800:#2E187F;
+  --c-purple-700:#4F29B7;
+  --c-purple-600:#6F4FD1;
+  --c-purple-500:#8C71DD;
+  --c-purple-200:#E0D1FF;
+  --c-purple-100:#F0E8FF;
+
+  --c-ink:#11112B;
+  --c-ink-2:#1B1A43;
+  --c-fg-1:#3D3F52;
+  --c-fg-2:#595C75;
+  --c-fg-3:#71717C;
+  --c-fg-4:#AEB0C4;
+
+  --c-border:#E7E8F3;
+  --c-border-2:#CECFDD;
+  --c-border-3:#DDDEEB;
+  --c-bg-canvas:#FDFDFD;
+  --c-bg-white:#FFFFFF;
+  --c-bg-soft:#F1F1F9;
+  --c-bg-soft-2:#FBFCFD;
+
+  --c-accent-pink:#FF0099;
+  --c-accent-mint:#4AFED1;
+  --c-accent-red:#E3342E;
+
+  --c-bg:var(--c-bg-canvas);
+  --c-shell:var(--c-purple-700);
+  --c-text:var(--c-ink);
+  --c-text-muted:var(--c-fg-2);
+  --c-link:var(--c-purple-700);
+  --c-primary:var(--c-purple-700);
+  --c-primary-fg:#FDFDFD;
+  --c-on-dark:#FDFDFD;
+  --c-on-dark-2:var(--c-purple-200);
+
+  --font-sans:"Satoshi","Satoshi-Variable",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-display:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+
+  --fs-10:10px; --fs-12:12px; --fs-14:14px; --fs-16:16px; --fs-18:18px; --fs-20:20px;
+  --fs-24:24px; --fs-28:28px; --fs-32:32px; --fs-36:36px; --fs-42:42px; --fs-56:56px;
+  --fw-regular:400; --fw-medium:500; --fw-bold:700; --fw-black:900;
+  --lh-tight:1.0; --lh-snug:1.2; --lh-normal:1.4; --lh-relax:1.5;
+
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px;
+  --sp-6:24px; --sp-7:32px; --sp-8:40px; --sp-9:48px; --sp-10:64px;
+
+  --r-1:4px; --r-2:8px; --r-3:12px; --r-4:16px; --r-5:20px; --r-6:24px; --r-pill:999px;
+
+  --shadow-1:0 1px 2px rgba(17,17,43,0.04);
+  --shadow-2:0 2px 8px rgba(17,17,43,0.06),0 1px 2px rgba(17,17,43,0.04);
+  --shadow-3:0 8px 24px rgba(17,17,43,0.08),0 2px 6px rgba(17,17,43,0.04);
+  --shadow-pop:0 16px 48px rgba(17,17,43,0.20);
+
+  --ease-out:cubic-bezier(.2,.7,.2,1);
+  --ease-in-out:cubic-bezier(.4,0,.2,1);
+  --dur-fast:120ms; --dur-base:180ms; --dur-slow:260ms;
+
+  --shell-pad:12px;
+  --content-pad:32px;
+  --nav-w-collapsed:84px;
+  --nav-w-expanded:248px;
+  --topbar-h:60px;
+
+  /* prototype layout */
+  --proto-h:44px;
+  --rail-w:var(--nav-w-expanded);
+  --main-left:calc(var(--rail-w) + var(--shell-pad) * 2);
+  --focus:var(--c-purple-700);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--c-bg);color:var(--c-text);font-family:var(--font-sans);font-size:var(--fs-16);line-height:var(--lh-normal);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+a{color:var(--c-link);font-weight:var(--fw-bold);text-underline-offset:2px}
+a:hover{color:var(--c-purple-600)}
+
+/* prototype bar */
+.proto{--focus:var(--c-accent-mint);position:sticky;top:0;z-index:50;height:var(--proto-h);background:var(--c-purple-900);color:var(--c-on-dark);display:flex;flex-wrap:nowrap;gap:var(--sp-2);align-items:center;padding:0 var(--sp-4);font-size:var(--fs-14);white-space:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
+.proto strong{margin-right:var(--sp-2);font-weight:var(--fw-bold)}
+.proto button{flex:none;background:transparent;border:1px solid var(--c-purple-500);color:var(--c-on-dark);border-radius:var(--r-2);height:28px;padding:0 var(--sp-3);font-weight:var(--fw-medium);transition:background-color var(--dur-base) var(--ease-out),color var(--dur-base) var(--ease-out)}
+.proto button:hover{background:var(--c-purple-800)}
+.proto button[aria-current="true"]{background:var(--c-bg-canvas);color:var(--c-ink);border-color:var(--c-bg-canvas)}
+.proto .spacer{flex:1}
+.proto .notes-toggle{background:var(--c-accent-mint);color:var(--c-purple-900);border-color:var(--c-accent-mint);font-weight:var(--fw-bold);border-radius:var(--r-pill)}
+.proto .notes-toggle:hover{background:var(--c-bg-white);border-color:var(--c-bg-white)}
+.screen{display:none}
+.screen.on{display:block}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--sp-2);min-height:40px;padding:0 18px;border:1px solid var(--c-border);background:var(--c-bg-soft);color:var(--c-ink);border-radius:var(--r-3);font-family:var(--font-sans);font-weight:var(--fw-bold);font-size:var(--fs-16);line-height:var(--lh-snug);vertical-align:middle;transition:background-color var(--dur-base) var(--ease-out),color var(--dur-base) var(--ease-out),border-color var(--dur-base) var(--ease-out),transform var(--dur-fast) var(--ease-out)}
+.btn:hover{background:var(--c-purple-100);border-color:var(--c-purple-200)}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:var(--c-purple-700);border-color:var(--c-purple-700);color:var(--c-primary-fg)}
+.btn.primary:hover{background:var(--c-purple-600);border-color:var(--c-purple-600)}
+.btn.quiet{background:transparent;border-color:transparent;color:var(--c-purple-700)}
+.btn.quiet:hover{background:var(--c-purple-100)}
+.btn.small{min-height:32px;padding:0 var(--sp-3);font-size:var(--fs-14);border-radius:var(--r-2)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn.primary:disabled:hover{background:var(--c-purple-700);border-color:var(--c-purple-700)}
+
+/* shell: purple gutter, rail on the brand color, off-white canvas */
+.shell{display:grid;grid-template-columns:var(--rail-w) minmax(0,1fr);gap:var(--shell-pad);padding:var(--shell-pad);background:var(--c-shell);min-height:calc(100vh - var(--proto-h))}
+.shell > div:last-child{background:var(--c-bg-canvas);border-radius:var(--r-5);min-width:0}
+.rail{--focus:var(--c-accent-mint);color:var(--c-on-dark);padding:var(--sp-2) var(--sp-1) var(--sp-4);display:flex;flex-direction:column;gap:var(--sp-5);position:sticky;top:calc(var(--proto-h) + var(--shell-pad));height:calc(100vh - var(--proto-h) - var(--shell-pad) * 2);overflow:auto}
+.brand{font-size:var(--fs-18);font-weight:var(--fw-black);line-height:var(--lh-snug);color:var(--c-on-dark);padding:var(--sp-3) var(--sp-3) 0}
+.bundlebox{background:var(--c-purple-800);border-radius:var(--r-4);padding:var(--sp-4);color:var(--c-on-dark)}
+.bundlebox .k{font-size:var(--fs-12);color:var(--c-on-dark-2)}
+.bundlebox .k:first-child{text-transform:uppercase;letter-spacing:.06em;margin-bottom:var(--sp-1)}
+.bundlebox .v{font-weight:var(--fw-bold);line-height:var(--lh-snug);margin-bottom:var(--sp-1)}
+.bundlebox button{border:0;background:transparent;color:var(--c-on-dark);padding:0;font-size:var(--fs-14);font-weight:var(--fw-bold);margin-top:var(--sp-2);text-decoration:underline;text-underline-offset:2px}
+.bundlebox button:hover{color:var(--c-accent-mint)}
+.rail h3{font-size:var(--fs-12);color:var(--c-on-dark-2);font-weight:var(--fw-bold);text-transform:uppercase;letter-spacing:.06em;margin:0 var(--sp-3) var(--sp-2)}
+.queue{list-style:none;margin:0 0 var(--sp-2);padding:0;display:flex;flex-direction:column;gap:2px}
+.queue li button{--pip:var(--c-on-dark);--pip-idle:var(--c-on-dark-2);width:100%;text-align:left;border:0;background:transparent;color:var(--c-on-dark);border-radius:var(--r-3);padding:10px var(--sp-3);display:grid;grid-template-columns:14px 1fr;gap:10px;align-items:start;transition:background-color var(--dur-base) var(--ease-out)}
+.queue li button:hover{background:var(--c-purple-800)}
+.queue li button[aria-current="true"]{--pip:var(--c-purple-700);--pip-idle:var(--c-fg-3);background:var(--c-bg-canvas);color:var(--c-purple-800)}
+.queue .pip{width:12px;height:12px;border-radius:50%;margin-top:4px;border:2px solid var(--pip-idle)}
+.queue .pip.read{border-color:var(--pip);background:linear-gradient(90deg,var(--pip) 50%,transparent 50%)}
+.queue .pip.done{border-color:var(--pip);background:var(--pip)}
+.queue .pip.wait{border-color:var(--c-on-dark);background:var(--c-accent-pink)}
+.queue .t{font-size:var(--fs-14);font-weight:var(--fw-medium);line-height:1.3}
+.queue li button[aria-current="true"] .t{font-weight:var(--fw-bold)}
+.queue .s{font-size:var(--fs-12);color:var(--c-on-dark-2)}
+.queue li button[aria-current="true"] .s{color:var(--c-fg-2)}
+.rail .seeall{font-size:var(--fs-14);margin-left:var(--sp-3);color:var(--c-on-dark);text-decoration:underline}
+.rail .seeall:hover{color:var(--c-accent-mint)}
+
+/* stage strip: the Studio top tab strip */
+.stagebar{display:flex;align-items:center;gap:var(--sp-2);min-height:var(--topbar-h);padding:0 var(--sp-6);border-bottom:1px solid var(--c-border);background:var(--c-bg-canvas);border-radius:var(--r-5) var(--r-5) 0 0;position:sticky;top:calc(var(--proto-h) + var(--shell-pad));z-index:5;
+  /* solid shell-colored mask so the purple gutter stays above the strip once it sticks */
+  box-shadow:0 calc(var(--shell-pad) * -1) 0 var(--shell-pad) var(--c-shell)}
+.stage{display:flex;align-items:center;gap:var(--sp-2);border:0;background:transparent;height:var(--topbar-h);padding:0 var(--sp-2);color:var(--c-fg-2);font-size:var(--fs-14);font-weight:var(--fw-medium);white-space:nowrap;transition:color var(--dur-base) var(--ease-out)}
+.stage:hover{color:var(--c-ink)}
+.stage:focus-visible{outline-offset:-6px;border-radius:var(--r-3)}
+.stage .n{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:var(--fs-12);font-weight:var(--fw-bold);border:2px solid currentColor}
+.stage[aria-current="step"]{color:var(--c-ink);font-weight:var(--fw-bold);box-shadow:inset 0 -2px 0 var(--c-purple-700)}
+.stage[aria-current="step"] .n{color:var(--c-purple-700);border-color:var(--c-purple-700);background:var(--c-purple-100)}
+.stage.done .n{background:var(--c-purple-700);border-color:var(--c-purple-700);color:var(--c-on-dark)}
+.stagebar .line{flex:none;width:24px;height:2px;border-radius:var(--r-pill);background:var(--c-border-2)}
+.stagebar .grow{flex:1}
+.avatar{flex:none;width:32px;height:32px;border-radius:50%;background:var(--c-purple-700);color:var(--c-on-dark);display:grid;place-items:center;font-size:var(--fs-12);font-weight:var(--fw-bold)}
+
+/* screen 1: choose */
+#choose{background:var(--c-shell);padding:var(--shell-pad);min-height:calc(100vh - var(--proto-h))}
+.choose{max-width:980px;margin:0 auto;padding:var(--sp-9) var(--sp-9) var(--sp-10);background:var(--c-bg-canvas);border-radius:var(--r-5)}
+.choose h1{font-family:var(--font-display);font-weight:var(--fw-bold);font-size:var(--fs-42);line-height:var(--lh-snug);letter-spacing:-0.011em;color:var(--c-ink);margin:0 0 var(--sp-3);max-width:18ch}
+.choose .lede{color:var(--c-fg-2);max-width:56ch;margin:0 0 var(--sp-7);font-size:var(--fs-18);line-height:var(--lh-relax)}
+.signedin{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-3);margin-bottom:var(--sp-7);font-size:var(--fs-14);color:var(--c-fg-2)}
+.signedin a{text-decoration:underline}
+.orgtabs{display:flex;gap:var(--sp-2);margin-bottom:var(--sp-4);flex-wrap:wrap}
+.orgtabs button{border:1px solid var(--c-border-2);background:transparent;color:var(--c-ink);border-radius:var(--r-pill);min-height:36px;padding:0 var(--sp-4);font-size:var(--fs-14);font-weight:var(--fw-medium);transition:background-color var(--dur-base) var(--ease-out),color var(--dur-base) var(--ease-out)}
+.orgtabs button:hover{background:var(--c-bg-soft)}
+.orgtabs button[aria-pressed="true"]{background:var(--c-purple-700);color:var(--c-on-dark);border-color:var(--c-purple-700);font-weight:var(--fw-bold)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:var(--sp-4)}
+.tile{position:relative;background:var(--c-bg-soft);border:1px solid var(--c-border);border-radius:var(--r-5);padding:var(--sp-5);text-align:left;min-height:136px;display:flex;flex-direction:column;gap:6px;color:var(--c-ink);transition:background-color var(--dur-base) var(--ease-out),border-color var(--dur-base) var(--ease-out),transform var(--dur-fast) var(--ease-out)}
+.tile:hover{border-color:var(--c-purple-200)}
+.tile:active{transform:scale(.98)}
+.tile[aria-pressed="true"]{background:var(--c-purple-100);border-color:var(--c-purple-700);box-shadow:inset 0 0 0 1px var(--c-purple-700)}
+.tile .name{font-size:var(--fs-18);font-weight:var(--fw-bold);line-height:var(--lh-snug);padding-right:var(--sp-7)}
+.tile .meta{font-size:var(--fs-14);color:var(--c-fg-2);margin-top:auto}
+.tile .check{position:absolute;top:var(--sp-4);right:var(--sp-4);width:22px;height:22px;border-radius:50%;border:2px solid var(--c-border-2);display:grid;place-items:center;font-size:var(--fs-12);font-weight:var(--fw-bold);color:transparent}
+.tile[aria-pressed="true"] .check{background:var(--c-purple-700);border-color:var(--c-purple-700);color:var(--c-on-dark)}
+.savebar{display:flex;gap:var(--sp-3);align-items:center;margin-top:var(--sp-6);padding:var(--sp-4) var(--sp-5);background:var(--c-bg-soft);border:1px solid var(--c-border);border-radius:var(--r-5);flex-wrap:wrap}
+.savebar input{height:44px;border:1px solid var(--c-border-2);border-radius:var(--r-3);background:var(--c-bg-canvas);color:var(--c-ink);padding:0 var(--sp-4);min-width:min(240px,100%);flex:1;transition:border-color var(--dur-base) var(--ease-out)}
+.savebar input:focus-visible{border-color:var(--c-purple-700)}
+.savebar .sum{color:var(--c-fg-2);font-size:var(--fs-14)}
+
+/* screen 2: listen */
+.listen{display:grid;grid-template-columns:minmax(0,1fr) 260px;max-width:1100px;margin:0 auto;padding:var(--sp-7) var(--sp-7) 160px;gap:0}
+.listen header{grid-column:1/-1;margin-bottom:var(--sp-5)}
+.listen h1{font-size:var(--fs-32);font-weight:var(--fw-bold);line-height:var(--lh-snug);color:var(--c-ink);margin:0}
+.listen header .sub{color:var(--c-fg-2);font-size:var(--fs-14);margin-top:var(--sp-1)}
+.sec{grid-column:1/-1;display:flex;align-items:center;gap:var(--sp-3);margin:var(--sp-7) 0 var(--sp-3)}
+.sec .label{font-size:var(--fs-16);font-weight:var(--fw-bold);color:var(--c-purple-700)}
+.sec .rule{flex:1;height:1px;background:var(--c-border)}
+.sec .set{font-size:var(--fs-12);font-weight:var(--fw-bold);color:var(--c-fg-2);border:1px dashed var(--c-border-2);background:transparent;border-radius:var(--r-pill);padding:4px var(--sp-3);transition:color var(--dur-base) var(--ease-out),border-color var(--dur-base) var(--ease-out)}
+.sec .set:hover{color:var(--c-purple-700);border-color:var(--c-purple-500)}
+.para{display:contents}
+.para .body{padding:var(--sp-2) var(--sp-7) var(--sp-2) 0;border-right:1px solid var(--c-border)}
+.para .who{font-size:var(--fs-14);font-weight:var(--fw-bold);color:var(--c-ink)}
+.para p{font-size:var(--fs-18);line-height:var(--lh-relax);color:var(--c-fg-1);margin:2px 0 0;max-width:60ch}
+/* margin notes: the Studio highlight treatment (soft lavender, purple left rule), set in the margin */
+.para .note{position:relative;align-self:start;margin:var(--sp-4) 0 var(--sp-2) var(--sp-5);padding:var(--sp-2) var(--sp-3);background:var(--c-purple-100);border-left:3px solid var(--c-purple-500);border-radius:var(--r-1) var(--r-3) var(--r-3) var(--r-1);font-size:var(--fs-16);font-weight:var(--fw-medium);line-height:var(--lh-normal);color:var(--c-purple-800)}
+.para .note:empty{background:none;border:0;padding:0;margin:0}
+.para .note:not(:empty)::after{content:"";position:absolute;left:calc((var(--sp-5) + 3px) * -1);top:19px;width:var(--sp-5);height:1px;background:var(--c-purple-200)}
+.para .note.star{border-left-color:var(--c-purple-700);padding-left:calc(var(--sp-3) + 18px)}
+.para .note.star::before{content:"★";position:absolute;left:var(--sp-3);top:var(--sp-2);font-size:var(--fs-14);line-height:22px;color:var(--c-purple-700)}
+.para .note .ai{display:block;font-size:var(--fs-12);font-weight:var(--fw-regular);color:var(--c-fg-2);margin-top:var(--sp-1)}
+mark{background:var(--c-purple-200);color:var(--c-ink);cursor:pointer;padding:1px 2px;border-radius:var(--r-1);-webkit-box-decoration-break:clone;box-decoration-break:clone;transition:background-color var(--dur-base) var(--ease-out)}
+mark.star{background:var(--c-accent-mint)}
+.hl-tools{display:inline-flex;gap:var(--sp-1);margin-left:var(--sp-2);vertical-align:middle;opacity:0;transition:opacity var(--dur-fast) var(--ease-out)}
+.para:hover .hl-tools,.para:focus-within .hl-tools{opacity:1}
+.hl-tools button{border:1px solid var(--c-border-2);background:var(--c-bg-canvas);border-radius:var(--r-2);font-size:var(--fs-12);font-weight:var(--fw-bold);line-height:var(--lh-normal);padding:2px var(--sp-2);color:var(--c-fg-1)}
+.hl-tools button:hover{background:var(--c-purple-100);border-color:var(--c-purple-200);color:var(--c-purple-700)}
+
+/* dock: a brand deep-wash card floating over the canvas */
+.dock{position:fixed;left:var(--main-left);right:var(--shell-pad);bottom:0;z-index:20;padding:0 var(--sp-6) var(--sp-6);pointer-events:none}
+.dock-inner{--focus:var(--c-accent-mint);pointer-events:auto;max-width:1044px;margin:0 auto;background:var(--c-purple-800);color:var(--c-on-dark);border-radius:var(--r-5);padding:var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-5);display:flex;align-items:center;gap:var(--sp-4);box-shadow:var(--shadow-pop)}
+.dock .audio{display:flex;align-items:center;gap:var(--sp-3);flex:1;min-width:0;font-family:var(--font-mono);font-size:var(--fs-12);font-weight:var(--fw-medium);color:var(--c-on-dark-2)}
+.dock .play{flex:none;width:36px;height:36px;border-radius:50%;border:0;background:var(--c-bg-white);color:var(--c-purple-800);font-size:var(--fs-12)}
+.dock .play:hover{background:var(--c-purple-100)}
+.dock .bar{flex:1;min-width:40px;height:4px;border-radius:var(--r-pill);background:var(--c-purple-700);position:relative}
+.dock .bar i{position:absolute;left:0;top:0;bottom:0;width:38%;background:var(--c-accent-mint);border-radius:var(--r-pill)}
+.dock .rec{flex:none;background:var(--c-bg-white);border:0;color:var(--c-purple-800);border-radius:var(--r-3);min-height:40px;padding:0 18px;font-weight:var(--fw-bold);display:flex;gap:var(--sp-2);align-items:center;transition:background-color var(--dur-base) var(--ease-out),transform var(--dur-fast) var(--ease-out)}
+.dock .rec:hover{background:var(--c-purple-100)}
+.dock .rec:active{transform:scale(.98)}
+.dock .rec::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--c-accent-pink)}
+.dock.recording .dock-inner{flex-wrap:wrap}
+.dock .recpanel{display:none;width:100%;gap:var(--sp-4);align-items:center;border-top:1px solid var(--c-purple-700);padding-top:var(--sp-3);margin-top:var(--sp-1)}
+.dock.recording .recpanel{display:flex}
+.recpanel .wave{flex:1;min-width:0;overflow:hidden;display:flex;gap:3px;align-items:center;height:30px}
+.recpanel .wave i{flex:none;display:block;width:3px;border-radius:var(--r-pill);background:var(--c-purple-200)}
+.recpanel .time{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-weight:var(--fw-bold)}
+.recpanel .prompt{font-weight:var(--fw-medium);color:var(--c-on-dark-2);font-size:var(--fs-16);max-width:32ch}
+#recStop{background:var(--c-bg-soft);border-color:var(--c-bg-soft);color:var(--c-ink)}
+#recStop:hover{background:var(--c-purple-100);border-color:var(--c-purple-100)}
+.recpanel .btn.primary{background:var(--c-accent-mint);border-color:var(--c-accent-mint);color:var(--c-purple-900)}
+.recpanel .btn.primary:hover{background:var(--c-bg-white);border-color:var(--c-bg-white)}
+
+/* screen 3: reflect */
+.reflect{max-width:1100px;margin:0 auto;padding:var(--sp-7) var(--sp-7) 140px}
+.reflect h1{font-size:var(--fs-32);font-weight:var(--fw-bold);line-height:var(--lh-snug);color:var(--c-ink);margin:0 0 var(--sp-2)}
+.reflect .lede{color:var(--c-fg-2);margin:0 0 var(--sp-6);max-width:60ch;line-height:var(--lh-relax)}
+.rgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--sp-7)}
+.said{font-size:var(--fs-18);line-height:var(--lh-relax);color:var(--c-fg-1);background:var(--c-bg-soft);border:1px solid var(--c-border);border-radius:var(--r-5);padding:var(--sp-6)}
+.said .sub{font-size:var(--fs-14);font-weight:var(--fw-medium);color:var(--c-fg-2);margin-bottom:var(--sp-2)}
+.said u{text-decoration:none;background:var(--c-purple-200);color:var(--c-ink);border-radius:var(--r-1);padding:1px 3px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.cand{background:var(--c-bg-canvas);border:1px solid var(--c-border);border-radius:var(--r-5);padding:var(--sp-5);margin-bottom:var(--sp-3);transition:border-color var(--dur-base) var(--ease-out),background-color var(--dur-base) var(--ease-out),opacity var(--dur-base) var(--ease-out)}
+.cand.kept{border-color:var(--c-purple-700);background:var(--c-purple-100);box-shadow:inset 0 0 0 1px var(--c-purple-700)}
+.cand.skipped{opacity:.7}
+.cand .to{display:inline-flex;align-items:center;min-height:24px;padding:0 10px;border-radius:var(--r-pill);background:var(--c-purple-100);color:var(--c-purple-700);font-size:var(--fs-12);font-weight:var(--fw-bold)}
+.cand.kept .to{background:var(--c-bg-canvas)}
+.cand .ins{font-size:var(--fs-18);font-weight:var(--fw-bold);line-height:var(--lh-normal);color:var(--c-ink);margin:var(--sp-3) 0}
+.cand .ev{font-size:var(--fs-14);color:var(--c-fg-1);border-left:3px solid var(--c-purple-700);padding:2px 0 2px var(--sp-3);margin-bottom:6px}
+.cand .ev small{display:block;color:var(--c-fg-2);font-size:var(--fs-12);margin-top:2px}
+.cand .acts{display:flex;flex-wrap:wrap;gap:var(--sp-2);margin-top:var(--sp-4)}
+.tray{border:2px dashed var(--c-border-2);border-radius:var(--r-5);padding:var(--sp-4) var(--sp-5);margin-top:var(--sp-4);color:var(--c-fg-2);font-size:var(--fs-14);line-height:var(--lh-relax)}
+.tray .btn{margin-top:var(--sp-2)}
+.endbar{position:fixed;left:var(--main-left);right:var(--shell-pad);bottom:var(--shell-pad);background:var(--c-bg-canvas);border-top:1px solid var(--c-border);border-radius:0 0 var(--r-5) var(--r-5);padding:var(--sp-3) var(--sp-6);display:flex;gap:var(--sp-3);align-items:center;z-index:10;
+  /* solid shell-colored mask so content never shows through the bottom gutter */
+  box-shadow:0 var(--shell-pad) 0 0 var(--c-shell)}
+.endbar .grow{flex:1;color:var(--c-fg-2);font-size:var(--fs-14)}
+.toast{--focus:var(--c-accent-mint);position:fixed;left:calc(50% + (var(--rail-w) + var(--shell-pad)) / 2);bottom:96px;transform:translateX(-50%);background:var(--c-purple-900);color:var(--c-on-dark);border-radius:var(--r-pill);padding:var(--sp-3) var(--sp-5);display:none;gap:var(--sp-4);align-items:center;z-index:60;font-size:var(--fs-14);white-space:nowrap;box-shadow:var(--shadow-pop)}
+.toast.on{display:flex}
+.toast a{color:var(--c-accent-mint)}
+.toast a:hover{color:var(--c-bg-white)}
+
+/* screen 4: make sense board */
+.board{padding:var(--sp-6) var(--sp-7) var(--sp-9)}
+.board-head{display:flex;align-items:flex-end;gap:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-5);flex-wrap:wrap}
+.board-head h1{font-size:var(--fs-32);font-weight:var(--fw-bold);line-height:var(--lh-snug);color:var(--c-ink);margin:0}
+.board-head .sub{color:var(--c-fg-2);font-size:var(--fs-14);margin-top:var(--sp-1);max-width:60ch}
+.board-head .grow{flex:1}
+.focus{display:inline-flex;align-items:center;min-height:28px;font-size:var(--fs-12);font-weight:var(--fw-bold);padding:0 var(--sp-3);border-radius:var(--r-pill);background:var(--c-purple-100);color:var(--c-purple-700);align-self:center}
+.cols{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(280px,1fr);gap:var(--sp-4);overflow-x:auto;padding-bottom:var(--sp-3)}
+.col{background:var(--c-bg-soft);border:1px solid var(--c-border);border-radius:var(--r-5);padding:var(--sp-4);min-height:300px}
+.col.unfocused{background:transparent;border:2px dashed var(--c-border-2)}
+.col h2{font-size:var(--fs-18);font-weight:var(--fw-bold);line-height:var(--lh-snug);color:var(--c-ink);margin:2px var(--sp-1) var(--sp-1)}
+.col .cmeta{font-size:var(--fs-12);color:var(--c-fg-2);margin:0 var(--sp-1) var(--sp-3);display:flex;gap:var(--sp-2);align-items:center}
+.col .cmeta button{border:0;background:transparent;color:var(--c-purple-700);font-size:var(--fs-12);font-weight:var(--fw-bold);padding:0}
+.col .cmeta button:hover{text-decoration:underline}
+.theme{border-radius:var(--r-4);padding:var(--sp-3);margin-bottom:var(--sp-3);background:var(--c-bg-canvas);border:1px solid var(--c-border)}
+.theme > .th{display:flex;align-items:center;gap:var(--sp-2);font-weight:var(--fw-bold);font-size:var(--fs-14);color:var(--c-ink);margin-bottom:6px}
+.theme > .th .sw{flex:none;width:10px;height:10px;border-radius:50%}
+.theme > .th .grow{flex:1}
+.theme > .th button{border:0;background:transparent;font-size:var(--fs-16);line-height:1;color:var(--c-fg-3);padding:4px 6px;border-radius:var(--r-2);transition:background-color var(--dur-base) var(--ease-out)}
+.theme > .th button:hover{background:var(--c-purple-100)}
+.theme > .th button[aria-pressed="true"]{color:var(--c-purple-700)}
+.theme.suggested{border:1px dashed var(--c-purple-500);background:var(--c-bg-soft-2)}
+.theme.suggested .why{font-size:var(--fs-12);color:var(--c-fg-2);margin:0 0 var(--sp-2)}
+.card{background:var(--c-bg-soft);border-radius:var(--r-3);padding:var(--sp-2) var(--sp-3);margin-top:6px;font-size:var(--fs-14);line-height:var(--lh-normal);color:var(--c-ink)}
+.col > .card{background:var(--c-bg-canvas);border:1px solid var(--c-border)}
+.card .src{font-size:var(--fs-12);color:var(--c-fg-2);margin-top:var(--sp-1)}
+.card[draggable]{cursor:grab}
+.loose{font-size:var(--fs-12);font-weight:var(--fw-bold);text-transform:uppercase;letter-spacing:.06em;color:var(--c-fg-2);margin:var(--sp-4) var(--sp-1) var(--sp-1)}
+
+/* what changed drawer */
+.drawer{--focus:var(--c-accent-mint);position:fixed;top:var(--proto-h);right:0;bottom:0;width:360px;max-width:100vw;background:var(--c-purple-900);color:var(--c-on-dark);padding:var(--sp-6);overflow:auto;z-index:45;transform:translateX(100%);transition:transform var(--dur-slow) var(--ease-in-out)}
+.drawer.on{transform:none;box-shadow:var(--shadow-pop)}
+.drawer h2{font-size:var(--fs-18);font-weight:var(--fw-bold);line-height:var(--lh-snug);margin:0 0 var(--sp-1)}
+.drawer p.sub{color:var(--c-on-dark-2);font-size:var(--fs-14);margin:0 0 var(--sp-4)}
+.drawer ul{padding-left:18px;margin:0;font-size:var(--fs-14);line-height:var(--lh-normal)}
+.drawer li{margin-bottom:var(--sp-3)}
+.drawer li::marker{color:var(--c-accent-mint)}
+.drawer li em{color:var(--c-on-dark-2);font-style:normal;display:block;font-size:var(--fs-12);margin-top:2px}
+
+@media (max-width:960px){
+  :root{--main-left:var(--shell-pad)}
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .rail{position:static;height:auto}
+  .listen{grid-template-columns:minmax(0,1fr);padding:var(--sp-5) var(--sp-4) 200px}
+  .para .body{border-right:0;padding-right:0}
+  .para .note{margin:var(--sp-1) 0 var(--sp-3) var(--sp-4)}
+  .para .note:not(:empty)::after{display:none}
+  .dock{padding:0 var(--sp-3) var(--sp-5)}
+  .toast{left:50%}
+  .rgrid{grid-template-columns:minmax(0,1fr)}
+  .stagebar{overflow-x:auto;padding:0 var(--sp-4)}
+  .reflect{padding:var(--sp-5) var(--sp-4) 180px}
+  .board{padding:var(--sp-5) var(--sp-4) var(--sp-9)}
+  .choose h1{font-size:var(--fs-32)}
+  .listen h1,.reflect h1,.board-head h1{font-size:var(--fs-28)}
+}
+@media (max-width:600px){
+  :root{--proto-h:84px}
+  .proto{display:grid;grid-template-columns:repeat(6,max-content);grid-template-rows:auto auto;align-content:center;row-gap:6px;column-gap:var(--sp-2)}
+  .proto strong{grid-column:1/-1;max-width:calc(100vw - var(--sp-7));overflow:hidden;text-overflow:ellipsis}
+  .proto .spacer{width:var(--sp-2)}
+  .endbar .btn{padding:0 var(--sp-3);font-size:var(--fs-14)}
+  .choose{padding:var(--sp-7) var(--sp-4) var(--sp-9)}
+  .dock-inner{flex-wrap:wrap;padding:var(--sp-3)}
+  .dock .audio{flex-basis:100%}
+  .dock .rec{flex:1;justify-content:center}
+  .dock .recpanel{flex-wrap:wrap;gap:var(--sp-3)}
+  .recpanel .prompt{flex-basis:100%;max-width:none}
+  .endbar{flex-wrap:wrap;padding:var(--sp-3) var(--sp-4)}
+  .endbar .grow{flex-basis:100%}
+  .toast{white-space:normal;width:max-content;max-width:calc(100vw - var(--sp-7))}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="proto" role="navigation" aria-label="Mock screens">
+  <strong>Mock B: restructure around listen, reflect, make sense</strong>
+  <button data-go="choose">1 Sign in and choose</button>
+  <button data-go="listen">2 Listen</button>
+  <button data-go="reflect">3 Reflect</button>
+  <button data-go="sense">4 Make sense</button>
+  <span class="spacer"></span>
+  <button class="notes-toggle" id="notesBtn" aria-expanded="false">What changed on this screen</button>
+</div>
+
+<!-- 1 CHOOSE -->
+<section class="screen" id="choose">
+  <div class="choose">
+    <div class="signedin"><span class="avatar">HS</span>Signed in with Cortico as Harrison. <a href="#">Switch account</a></div>
+    <h1>What are you listening to this season?</h1>
+    <p class="lede">Bundle the projects you want to read across. Your notes, reflections and themes stay with the bundle, so you can come back to it, or start another.</p>
+    <div class="orgtabs" role="group" aria-label="Organization">
+      <button aria-pressed="true">American Conversation Project</button>
+      <button aria-pressed="false">Real Talk for Change</button>
+    </div>
+    <div class="tiles" id="tiles">
+      <button class="tile" aria-pressed="true" data-n="42"><span class="check">✓</span><span class="name">Main Street listening circles</span><span class="meta">42 conversations, Iowa and Nebraska</span></button>
+      <button class="tile" aria-pressed="true" data-n="18"><span class="check">✓</span><span class="name">Rural libraries series</span><span class="meta">18 conversations, 9 counties</span></button>
+      <button class="tile" aria-pressed="false" data-n="27"><span class="check">✓</span><span class="name">Veterans coming home</span><span class="meta">27 conversations</span></button>
+      <button class="tile" aria-pressed="true" data-n="11"><span class="check">✓</span><span class="name">Faith communities pilot</span><span class="meta">11 conversations</span></button>
+      <button class="tile" aria-pressed="false" data-n="35"><span class="check">✓</span><span class="name">Youth voices, summer cohort</span><span class="meta">35 conversations, no guide</span></button>
+    </div>
+    <div class="savebar">
+      <input value="Fall 2026: small-town institutions" aria-label="Bundle name">
+      <span class="sum" id="sum">3 projects, 71 conversations</span>
+      <button class="btn primary" data-go="listen">Start listening</button>
+    </div>
+  </div>
+</section>
+
+<template id="railTpl">
+  <aside class="rail">
+    <div class="brand">Notes in the Margin</div>
+    <div class="bundlebox"><div class="k">Bundle</div><div class="v">Fall 2026: small-town institutions</div><div class="k">3 projects, 71 conversations</div><button data-go="choose">Change</button></div>
+    <div>
+      <h3>Up next</h3>
+      <ul class="queue">
+        <li><button aria-current="true" data-go="listen"><span class="pip read"></span><span><span class="t">Library board neighbors, Cedar Falls</span><br><span class="s">Reading, 38%</span></span></button></li>
+        <li><button data-go="reflect"><span class="pip wait"></span><span><span class="t">Thursday coffee group</span><br><span class="s">Reflection to review</span></span></button></li>
+        <li><button data-go="listen"><span class="pip"></span><span><span class="t">Sunday supper, St. Brigid's hall</span><br><span class="s">Suggested: echoes your library notes</span></span></button></li>
+        <li><button data-go="listen"><span class="pip done"></span><span><span class="t">After the mill closed</span><br><span class="s">Reflected Oct 3</span></span></button></li>
+      </ul>
+      <a href="#" class="seeall">All 71 conversations</a>
+    </div>
+  </aside>
+</template>
+<template id="stageTpl">
+  <div class="stagebar">
+    <button class="stage" data-stage="listen" data-go="listen"><span class="n">1</span>Listen</button><span class="line"></span>
+    <button class="stage" data-stage="reflect" data-go="reflect"><span class="n">2</span>Reflect</button><span class="line"></span>
+    <button class="stage" data-stage="sense" data-go="sense"><span class="n">3</span>Make sense</button>
+    <span class="grow"></span><span class="avatar">HS</span>
+  </div>
+</template>
+
+<!-- 2 LISTEN -->
+<section class="screen" id="listen">
+  <div class="shell">
+    <div data-rail></div>
+    <div>
+      <div data-stage-for="listen"></div>
+      <div class="listen" id="page">
+        <header>
+          <h1>Library board neighbors, Cedar Falls</h1>
+          <div class="sub">Rural libraries series, Oct 14, 2026, 58 minutes, 6 people</div>
+        </header>
+
+        <div class="sec"><span class="label">A place you feel known</span><span class="rule"></span></div>
+        <div class="para">
+          <div class="body"><div class="who">Dale</div>
+          <p>When I walk into the library, Marcy knows my name before I'm through the door. <mark class="star">She knows I'm going to ask about the seed catalog and she's already pulled it.</mark> That's not nothing. That's the only place in town that happens anymore.<span class="hl-tools"><button>Star</button><button>Edit note</button><button>Remove</button></span></p></div>
+          <div class="note star">known by name, same words as the coffee group!</div>
+        </div>
+        <div class="para">
+          <div class="body"><div class="who">Ruth</div>
+          <p>It used to be the bank, too. You'd go in and Gene would ask about your mother. <mark>Now it's a screen and a phone number that goes to Omaha.</mark><span class="hl-tools"><button>Star</button><button>Add note</button><button>Remove</button></span></p></div>
+          <div class="note">institutions moving away<span class="ai">Also suggested for Trust in local institutions</span></div>
+        </div>
+        <div class="para">
+          <div class="body"><div class="who">Facilitator</div>
+          <p>What does it feel like when that changes, when the person behind the counter isn't from here?</p></div>
+          <div class="note"></div>
+        </div>
+        <div class="para">
+          <div class="body"><div class="who">Marisol</div>
+          <p>Honestly, it feels like they decided we weren't worth a person. I moved here eleven years ago and the library was how I met anyone. If they cut the hours again, I don't know where people like me would go.</p></div>
+          <div class="note"></div>
+        </div>
+
+        <div class="sec"><span class="label" style="color:var(--c-fg-3)">When trust was broken</span><span class="rule"></span><button class="set" id="setSec">Set where this starts</button></div>
+        <div class="para">
+          <div class="body"><div class="who">Dale</div>
+          <p>The board vote was the thing. They held it at two in the afternoon on a Tuesday. Who can come to that? Farmers can't. Anybody with a shift can't.</p></div>
+          <div class="note"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="dock" id="dock">
+    <div class="dock-inner">
+      <div class="audio"><button class="play" aria-label="Play">▶</button><span>22:10</span><span class="bar"><i></i></span><span>58:10</span></div>
+      <button class="rec" id="recBtn">Reflect out loud</button>
+      <div class="recpanel">
+        <span class="time">1:48</span>
+        <span class="wave" id="wave"></span>
+        <span class="prompt">What would you want to hear more about?</span>
+        <button class="btn small" id="recStop">Discard</button>
+        <button class="btn small primary" data-go="reflect">Done, show connections</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 REFLECT -->
+<section class="screen" id="reflect">
+  <div class="shell">
+    <div data-rail></div>
+    <div>
+      <div data-stage-for="reflect"></div>
+      <div class="reflect">
+        <h1>What your reflection connects to</h1>
+        <p class="lede">Shaded phrases are what each connection came from. Keep what rings true. Nothing reaches your board until you keep it.</p>
+        <div class="rgrid">
+          <div>
+            <div class="said"><div class="sub">You, after Thursday coffee group, 3 min 42 s</div>
+            The thing that keeps coming back is people saying someone "knows them." The library, the diner. <u>It's less about the service and more about being recognized.</u> And then the flip side, <u>the board meeting at 2pm, that felt like the clearest example of trust breaking.</u> Not a scandal, just a time nobody could make.</div>
+            <div class="tray"><b style="color:var(--c-ink)">1 starred passage</b> isn't connected yet: "Now it's a screen and a phone number that goes to Omaha." <button class="btn small">Connect it</button> <button class="btn small quiet">Later</button></div>
+          </div>
+          <div>
+            <div class="cand" data-c>
+              <div class="to">Belonging</div>
+              <div class="ins">Belonging is described as being recognized by name, more than as access to services.</div>
+              <div class="ev">"Marcy knows my name before I'm through the door."<small>Your starred highlight</small></div>
+              <div class="acts"><button class="btn small" data-keep>Keep</button><button class="btn small">Reword</button><button class="btn small quiet" data-skip>Skip</button></div>
+            </div>
+            <div class="cand" data-c>
+              <div class="to">Trust in local institutions</div>
+              <div class="ins">Trust erodes through access decisions, like meeting times, not through scandal.</div>
+              <div class="ev">"They held it at two in the afternoon on a Tuesday."<small>Passage the AI found</small></div>
+              <div class="acts"><button class="btn small" data-keep>Keep</button><button class="btn small">Reword</button><button class="btn small quiet" data-skip>Skip</button></div>
+            </div>
+            <div class="cand" data-c>
+              <div class="to" style="color:var(--c-fg-2);background:var(--c-bg-soft)">No question yet</div>
+              <div class="ins">Diners and libraries play similar roles as places of recognition.</div>
+              <div class="acts"><button class="btn small" data-keep>Keep</button><button class="btn small">Reword</button><button class="btn small quiet" data-skip>Skip</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="endbar"><span class="grow" id="rcount"></span><button class="btn quiet">Come back later</button><button class="btn primary" id="keepBtn">Put 0 on the board</button></div>
+  <div class="toast" id="toast"><span>On the board.</span><a href="#" data-go="sense">Go to Make sense</a></div>
+</section>
+
+<!-- 4 MAKE SENSE -->
+<section class="screen" id="sense">
+  <div class="shell">
+    <div data-rail></div>
+    <div>
+      <div data-stage-for="sense"></div>
+      <div class="board">
+        <div class="board-head">
+          <div><h1>Make sense</h1><div class="sub">One column per research question. Themes group your insights. Drag an insight between themes.</div></div>
+          <span class="grow"></span>
+          <span class="focus">3 of 5 to 7 questions in focus</span>
+          <button class="btn">Suggest themes</button>
+          <button class="btn primary">Export codebook</button>
+        </div>
+        <div class="cols">
+          <section class="col">
+            <h2>How do people describe trust in local institutions?</h2>
+            <div class="cmeta">9 insights, 2 themes <button>Edit</button></div>
+            <div class="theme"><div class="th"><span class="sw" style="background:var(--c-purple-700)"></span>Access and exclusion<span class="grow"></span><button aria-pressed="true" title="In codebook">★</button></div>
+              <div class="card" draggable="true">Trust erodes through access decisions, like meeting times, not scandal.<div class="src">Library board neighbors</div></div>
+              <div class="card" draggable="true">Meeting notices only posted online shut out older residents.<div class="src">Thursday coffee group</div></div>
+            </div>
+            <div class="theme"><div class="th"><span class="sw" style="background:var(--c-purple-500)"></span>Institutions leaving<span class="grow"></span><button aria-pressed="false" title="Add to codebook">☆</button></div>
+              <div class="card" draggable="true">Centralizing reads as a judgment that the town isn't worth a person.<div class="src">Library board neighbors</div></div>
+            </div>
+            <div class="loose">Not in a theme yet</div>
+            <div class="card" draggable="true">The fire department is trusted because it's volunteer.<div class="src">After the mill closed</div></div>
+          </section>
+          <section class="col">
+            <h2>What does belonging to this community feel like?</h2>
+            <div class="cmeta">12 insights, 1 theme <button>Edit</button></div>
+            <div class="theme"><div class="th"><span class="sw" style="background:var(--c-accent-pink)"></span>Being known by name<span class="grow"></span><button aria-pressed="true">★</button></div>
+              <div class="card" draggable="true">Belonging is being recognized, more than access to services.<div class="src">Library board neighbors</div></div>
+              <div class="card" draggable="true">Newcomers describe the library as the first place anyone learned their name.<div class="src">Bookmobile volunteers</div></div>
+            </div>
+            <div class="theme suggested"><div class="th"><span class="sw" style="background:var(--c-fg-4)"></span>Suggested: third places<span class="grow"></span></div>
+              <p class="why">From 3 insights that mention diners, halls and libraries.</p>
+              <button class="btn small">Keep theme</button> <button class="btn small quiet">Dismiss</button>
+            </div>
+          </section>
+          <section class="col">
+            <h2>Where do people feel friction or disconnection?</h2>
+            <div class="cmeta">4 insights <button>Edit</button></div>
+            <div class="card" draggable="true">Shift workers feel left out of civic life by default.<div class="src">Library board neighbors</div></div>
+          </section>
+          <section class="col unfocused">
+            <h2 style="color:var(--c-fg-2)">No question yet</h2>
+            <div class="cmeta">3 insights <button>+ New question</button></div>
+            <div class="card" draggable="true">Diners and libraries play similar roles as places of recognition.<div class="src">Thursday coffee group</div></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<aside class="drawer" id="drawer" aria-label="What changed"><div id="drawerBody"></div></aside>
+
+<script>
+const NOTES={
+  choose:{t:"Sign in and choose",s:"Sign-in and project choice on one screen. You land here right after Cortico sign-in.",i:[
+    ["Projects shown as tiles you toggle, grouped by organization","Only projects the account can open in American Conversation Project, or any other organization it belongs to."],
+    ["A bundle gets a name and is saved","Bundles become the unit your notes, research questions and themes belong to. Today everything is global to one hard-coded user."],
+    ["A running count of projects and conversations","Shows the size of the bundle before you start."]]},
+  listen:{t:"Listen",s:"The Reader, rebuilt around the margin.",i:[
+    ["Notes are written in the margin beside the passage, in a hand font","The one bold move in this direction. It makes the app's name literal."],
+    ["The left rail is a queue, not a dropdown","It shows progress dots, what needs review, and the next suggestion. That replaces the 201-item select, the orange banner and the separate \"listen next\" list."],
+    ["Guide sections are inline headings","\"Set where this starts\" sits on the heading itself. That replaces the invisible hover strip and the word \"checkpoint\"."],
+    ["Star, note and remove show on hover or focus beside each highlight","Today you can't remove a highlight in the UI, and starring is an unmarked click."],
+    ["Audio and recording share one dock at the bottom","Recording no longer covers the page. Prompts rotate inside the dock. Try \"Reflect out loud\"."],
+    ["No research question editing here","Questions live on Make sense."]]},
+  reflect:{t:"Reflect",s:"The review dialog, as a full step.",i:[
+    ["Shaded phrases in your reflection show where each connection came from","This replaces the raw \"confidence: 0.7\" and rationale strings."],
+    ["Keep, Reword and Skip","The footer counts decisions and names the result: \"Put 2 on the board\". A confirmation follows."],
+    ["One tray for starred passages that aren't used yet","The same wording appears everywhere they show up."],
+    ["\"Come back later\" keeps undecided choices","The rail then shows the conversation as \"Reflection to review\"."]]},
+  sense:{t:"Make sense",s:"Memo and Organize merged into one board.",i:[
+    ["One column per research question, themes inside, insights as cards","It is the same data as today's memo, laid out for synthesis."],
+    ["\"Themes\" replaces \"code families\"","The ★ on a theme means \"in codebook\". That is the only star meaning on this screen."],
+    ["Focus is the set of columns","Unfocused questions and \"No question yet\" sit at the end with dashed borders."],
+    ["AI-suggested themes look visibly tentative (dashed)","Keep or Dismiss. The cap message only appears when you hit it."],
+    ["Export codebook is a primary action with a clear name","It replaces \"Prepare codebook\", whose only explanation was a hover tooltip."]]}
+};
+let current='choose';
+const rail=document.getElementById('railTpl'), stage=document.getElementById('stageTpl');
+document.querySelectorAll('[data-rail]').forEach(el=>el.replaceWith(rail.content.cloneNode(true)));
+document.querySelectorAll('[data-stage-for]').forEach(el=>{
+  const n=stage.content.cloneNode(true), s=el.dataset.stageFor, order=['listen','reflect','sense'];
+  n.querySelectorAll('.stage').forEach(b=>{ if(b.dataset.stage===s) b.setAttribute('aria-current','step'); if(order.indexOf(b.dataset.stage)<order.indexOf(s)) b.classList.add('done'); });
+  el.replaceWith(n);
+});
+function go(id){current=id;document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));
+  document.querySelectorAll('.proto [data-go]').forEach(b=>b.setAttribute('aria-current',b.dataset.go===id));
+  document.getElementById('dock').classList.remove('recording');renderNotes();window.scrollTo(0,0);}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-go]');if(t){e.preventDefault();go(t.dataset.go);}});
+const drawer=document.getElementById('drawer'),nb=document.getElementById('notesBtn');
+nb.onclick=()=>{const on=!drawer.classList.contains('on');drawer.classList.toggle('on',on);nb.setAttribute('aria-expanded',on);};
+function renderNotes(){const n=NOTES[current];document.getElementById('drawerBody').innerHTML=`<h2>${n.t}</h2><p class="sub">${n.s}</p><ul>${n.i.map(([a,b])=>`<li>${a}${b?`<em>${b}</em>`:''}</li>`).join('')}</ul>`;}
+
+/* tiles */
+function sum(){const on=[...document.querySelectorAll('.tile[aria-pressed="true"]')];document.getElementById('sum').textContent=`${on.length} project${on.length===1?'':'s'}, ${on.reduce((a,t)=>a+ +t.dataset.n,0)} conversations`;}
+document.querySelectorAll('.tile').forEach(t=>t.onclick=()=>{t.setAttribute('aria-pressed',t.getAttribute('aria-pressed')!=='true');sum();});
+document.querySelectorAll('.orgtabs button').forEach(b=>b.onclick=()=>document.querySelectorAll('.orgtabs button').forEach(x=>x.setAttribute('aria-pressed',x===b)));
+
+/* listen */
+document.querySelectorAll('#page mark').forEach(m=>m.onclick=()=>m.classList.toggle('star'));
+document.querySelectorAll('.hl-tools button').forEach(b=>{ if(b.textContent==='Star') b.onclick=()=>b.closest('p').querySelector('mark').classList.toggle('star'); });
+document.getElementById('setSec').onclick=e=>{const s=e.target.closest('.sec');s.querySelector('.label').style.color='';e.target.remove();};
+const dock=document.getElementById('dock');
+document.getElementById('recBtn').onclick=()=>dock.classList.add('recording');
+document.getElementById('recStop').onclick=()=>dock.classList.remove('recording');
+const wave=document.getElementById('wave');for(let i=0;i<60;i++){const b=document.createElement('i');b.style.height=(4+Math.round(Math.abs(Math.sin(i*0.9)*Math.cos(i*0.3))*24))+'px';wave.appendChild(b);}
+
+/* reflect */
+function upd(){const c=[...document.querySelectorAll('[data-c]')],k=c.filter(x=>x.classList.contains('kept')).length,l=c.filter(x=>!x.classList.contains('kept')&&!x.classList.contains('skipped')).length;
+  document.getElementById('rcount').textContent=l?`${l} still to decide, ${k} kept`:`All decided, ${k} kept`;const b=document.getElementById('keepBtn');b.textContent=`Put ${k} on the board`;b.disabled=!k;}
+document.querySelectorAll('[data-c]').forEach(c=>{c.querySelector('[data-keep]').onclick=()=>{c.classList.add('kept');c.classList.remove('skipped');upd();};c.querySelector('[data-skip]').onclick=()=>{c.classList.add('skipped');c.classList.remove('kept');upd();};});
+upd();
+document.getElementById('keepBtn').onclick=()=>{const t=document.getElementById('toast');t.classList.add('on');setTimeout(()=>t.classList.remove('on'),4000);};
+
+/* board star toggles */
+document.querySelectorAll('.theme .th button[aria-pressed]').forEach(b=>b.onclick=()=>{const on=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',on);b.textContent=on?'★':'☆';});
+go('choose');
+</script>
+</body>
+</html>

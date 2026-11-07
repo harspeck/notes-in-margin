@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notes in the Margin, mock B</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Schibsted+Grotesk:wght@400;500;600;700&family=Caveat:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F3F6F4; --paper:#FFFFFF; --ink:#1D2A33; --muted:#5A6A72; --faint:#8E9BA1; --rule:#D6DFDB;
+  --teal:#0E6E68; --teal-soft:#DDEFEC; --pencil:#3B4C8C; --mark:#D3F0DF; --mark-star:#9FE0BB;
+  --coral:#C4553A; --coral-soft:#F8E3DC; --amber:#8B5E10; --amber-soft:#F6ECD6;
+  --sans:"Schibsted Grotesk",system-ui,sans-serif; --serif:"Newsreader",Georgia,serif; --hand:"Caveat",cursive;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+a{color:var(--teal)}
+
+.proto{position:sticky;top:0;z-index:50;background:#22343A;color:#E6EFEC;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 16px;font-size:13px}
+.proto strong{margin-right:8px;font-weight:600}
+.proto button{background:transparent;border:1px solid #45606A;color:#E6EFEC;border-radius:6px;padding:3px 10px}
+.proto button[aria-current="true"]{background:#E6EFEC;color:#22343A;border-color:#E6EFEC}
+.proto .spacer{flex:1}
+.notes-toggle{background:#9FE0BB!important;color:#22343A!important;border-color:#9FE0BB!important}
+.screen{display:none}
+.screen.on{display:block}
+
+.btn{border:1px solid var(--rule);background:var(--paper);border-radius:999px;padding:7px 16px;font-weight:500}
+.btn.primary{background:var(--teal);border-color:var(--teal);color:#fff}
+.btn.quiet{border-color:transparent;background:transparent;color:var(--muted)}
+.btn.small{padding:4px 12px;font-size:13px}
+
+/* shell: left rail + stage bar */
+.shell{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:calc(100vh - 41px)}
+.rail{background:#E8EEEB;border-right:1px solid var(--rule);padding:18px 14px;display:flex;flex-direction:column;gap:18px;position:sticky;top:41px;height:calc(100vh - 41px);overflow:auto}
+.brand{font-family:var(--serif);font-size:19px;font-weight:600;padding:0 6px}
+.bundlebox{background:var(--paper);border:1px solid var(--rule);border-radius:12px;padding:10px 12px}
+.bundlebox .k{font-size:12px;color:var(--muted)}
+.bundlebox .v{font-weight:600}
+.bundlebox button{border:0;background:transparent;color:var(--teal);padding:0;font-size:13px;margin-top:4px}
+.rail h3{font-size:12px;color:var(--muted);font-weight:500;margin:0 6px 6px}
+.queue{list-style:none;margin:0;padding:0}
+.queue li button{width:100%;text-align:left;border:0;background:transparent;border-radius:10px;padding:8px;display:grid;grid-template-columns:14px 1fr;gap:8px;align-items:start}
+.queue li button[aria-current="true"]{background:var(--paper);box-shadow:0 0 0 1px var(--rule)}
+.queue .pip{width:10px;height:10px;border-radius:50%;margin-top:6px;border:2px solid var(--faint)}
+.queue .pip.read{border-color:var(--teal);background:linear-gradient(90deg,var(--teal) 50%,transparent 50%)}
+.queue .pip.done{border-color:var(--teal);background:var(--teal)}
+.queue .pip.wait{border-color:var(--coral);background:var(--coral)}
+.queue .t{font-size:14px;font-weight:500;line-height:1.3}
+.queue .s{font-size:12px;color:var(--muted)}
+.rail .seeall{font-size:13px;margin-left:6px}
+
+.stagebar{display:flex;align-items:center;gap:6px;padding:12px 28px;border-bottom:1px solid var(--rule);background:var(--paper);position:sticky;top:41px;z-index:5}
+.stage{display:flex;align-items:center;gap:8px;border:0;background:transparent;padding:6px 12px;border-radius:999px;color:var(--muted);font-weight:500}
+.stage .n{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;border:1.5px solid currentColor}
+.stage[aria-current="step"]{background:var(--teal-soft);color:var(--teal)}
+.stage.done .n{background:var(--teal);border-color:var(--teal);color:#fff}
+.stagebar .line{width:28px;height:1.5px;background:var(--rule)}
+.stagebar .grow{flex:1}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--pencil);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:600}
+
+/* screen 1: choose */
+.choose{max-width:980px;margin:0 auto;padding:48px 24px 80px}
+.choose h1{font-family:var(--serif);font-weight:500;font-size:40px;line-height:1.1;margin:0 0 10px;max-width:18ch}
+.choose .lede{color:var(--muted);max-width:56ch;margin:0 0 28px;font-size:16px}
+.signedin{display:flex;align-items:center;gap:10px;margin-bottom:28px;font-size:14px;color:var(--muted)}
+.orgtabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.orgtabs button{border:1px solid var(--rule);background:var(--paper);border-radius:999px;padding:6px 14px;font-weight:500}
+.orgtabs button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.tile{position:relative;background:var(--paper);border:1.5px solid var(--rule);border-radius:14px;padding:16px;text-align:left;min-height:130px;display:flex;flex-direction:column;gap:6px}
+.tile[aria-pressed="true"]{border-color:var(--teal);box-shadow:0 0 0 3px var(--teal-soft)}
+.tile .name{font-family:var(--serif);font-size:19px;line-height:1.2}
+.tile .meta{font-size:13px;color:var(--muted);margin-top:auto}
+.tile .check{position:absolute;top:12px;right:12px;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--rule);display:grid;place-items:center;font-size:12px;color:#fff}
+.tile[aria-pressed="true"] .check{background:var(--teal);border-color:var(--teal)}
+.savebar{display:flex;gap:12px;align-items:center;margin-top:20px;padding:14px 16px;background:var(--paper);border:1px solid var(--rule);border-radius:14px;flex-wrap:wrap}
+.savebar input{border:1px solid var(--rule);border-radius:8px;padding:7px 10px;min-width:240px;flex:1}
+.savebar .sum{color:var(--muted);font-size:14px}
+
+/* screen 2: listen */
+.listen{display:grid;grid-template-columns:minmax(0,1fr) 250px;max-width:1100px;margin:0 auto;padding:28px 28px 140px;gap:0}
+.listen header{grid-column:1/-1;margin-bottom:18px}
+.listen h1{font-family:var(--serif);font-weight:500;font-size:30px;margin:0;line-height:1.15}
+.listen header .sub{color:var(--muted);font-size:14px;margin-top:4px}
+.sec{grid-column:1/-1;display:flex;align-items:center;gap:12px;margin:26px 0 10px}
+.sec .label{font-family:var(--serif);font-style:italic;font-size:17px;color:var(--teal)}
+.sec .rule{flex:1;height:1px;background:var(--rule)}
+.sec .set{font-size:12px;color:var(--faint);border:1px dashed var(--rule);background:transparent;border-radius:999px;padding:2px 10px}
+.para{display:contents}
+.para .body{padding:6px 28px 6px 0;border-right:1px solid var(--rule)}
+.para .who{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.01em}
+.para p{font-family:var(--serif);font-size:18.5px;line-height:1.72;margin:2px 0 0;max-width:60ch}
+.para .note{padding:10px 0 6px 22px;font-family:var(--hand);font-size:21px;line-height:1.1;color:var(--pencil);position:relative}
+.para .note.star::before{content:"★";position:absolute;left:4px;top:10px;font-family:var(--sans);font-size:12px;color:var(--teal)}
+.para .note .ai{display:block;font-family:var(--sans);font-size:12px;color:var(--faint);margin-top:4px}
+mark{background:linear-gradient(transparent 12%,var(--mark) 12%,var(--mark) 88%,transparent 88%);color:inherit;cursor:pointer;padding:0 1px}
+mark.star{background:linear-gradient(transparent 12%,var(--mark-star) 12%,var(--mark-star) 88%,transparent 88%)}
+.hl-tools{display:inline-flex;gap:2px;margin-left:6px;vertical-align:middle;opacity:0;transition:opacity .12s}
+.para:hover .hl-tools,.para:focus-within .hl-tools{opacity:1}
+.hl-tools button{border:1px solid var(--rule);background:var(--paper);border-radius:6px;font-size:12px;padding:1px 6px;color:var(--muted)}
+
+/* dock */
+.dock{position:fixed;left:260px;right:0;bottom:0;z-index:20;padding:0 28px 18px;pointer-events:none}
+.dock-inner{pointer-events:auto;max-width:1044px;margin:0 auto;background:var(--ink);color:#EAF2EF;border-radius:18px;padding:12px 14px 12px 18px;display:flex;align-items:center;gap:14px;box-shadow:0 14px 34px rgba(29,42,51,.25)}
+.dock .audio{display:flex;align-items:center;gap:10px;flex:1;font-size:13px;color:#B8C7C3}
+.dock .play{width:30px;height:30px;border-radius:50%;border:0;background:#EAF2EF;color:var(--ink);font-size:11px}
+.dock .bar{flex:1;height:4px;border-radius:2px;background:#3A4D55;position:relative}
+.dock .bar i{position:absolute;left:0;top:0;bottom:0;width:38%;background:var(--mark-star);border-radius:2px}
+.dock .rec{background:var(--coral);border:0;color:#fff;border-radius:999px;padding:8px 16px;font-weight:600;display:flex;gap:8px;align-items:center}
+.dock .rec::before{content:"";width:9px;height:9px;border-radius:50%;background:#fff}
+.dock.recording .dock-inner{flex-wrap:wrap}
+.dock .recpanel{display:none;width:100%;gap:18px;align-items:center;border-top:1px solid #3A4D55;padding-top:12px;margin-top:4px}
+.dock.recording .recpanel{display:flex}
+.recpanel .wave{flex:1;display:flex;gap:3px;align-items:center;height:30px}
+.recpanel .wave i{display:block;width:3px;border-radius:2px;background:var(--mark-star)}
+.recpanel .time{font-variant-numeric:tabular-nums;font-weight:600}
+.recpanel .prompt{font-family:var(--serif);font-style:italic;color:#CFE0DA;font-size:15px;max-width:32ch}
+
+/* screen 3: reflect */
+.reflect{max-width:1100px;margin:0 auto;padding:28px 28px 120px}
+.reflect h1{font-family:var(--serif);font-weight:500;font-size:30px;margin:0 0 4px}
+.reflect .lede{color:var(--muted);margin:0 0 22px;max-width:60ch}
+.rgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px}
+.said{font-family:var(--serif);font-size:18px;line-height:1.7;background:var(--paper);border:1px solid var(--rule);border-radius:16px;padding:20px 22px}
+.said .sub{font-family:var(--sans);font-size:13px;color:var(--muted);margin-bottom:6px}
+.said u{text-decoration:none;background:var(--teal-soft);border-radius:3px;padding:0 2px}
+.cand{background:var(--paper);border:1px solid var(--rule);border-radius:16px;padding:16px 18px;margin-bottom:12px;transition:border-color .15s}
+.cand.kept{border-color:var(--teal);background:#F7FCFA}
+.cand.skipped{opacity:.5}
+.cand .to{font-size:13px;color:var(--teal);font-weight:600}
+.cand .ins{font-family:var(--serif);font-size:18px;line-height:1.35;margin:6px 0 10px}
+.cand .ev{font-size:14px;border-left:3px solid var(--mark-star);padding:2px 0 2px 10px;margin-bottom:6px}
+.cand .ev small{display:block;color:var(--faint);font-size:12px}
+.cand .acts{display:flex;gap:6px;margin-top:10px}
+.tray{border:1.5px dashed var(--rule);border-radius:16px;padding:14px 18px;margin-top:6px;color:var(--muted);font-size:14px}
+.endbar{position:fixed;left:260px;right:0;bottom:0;background:var(--paper);border-top:1px solid var(--rule);padding:12px 28px;display:flex;gap:12px;align-items:center;z-index:10}
+.endbar .grow{flex:1;color:var(--muted)}
+.toast{position:fixed;left:calc(50% + 130px);bottom:80px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:999px;padding:10px 18px;display:none;gap:14px;z-index:60}
+.toast.on{display:flex}
+.toast a{color:var(--mark-star)}
+
+/* screen 4: make sense board */
+.board{padding:24px 28px 60px}
+.board-head{display:flex;align-items:flex-end;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+.board-head h1{font-family:var(--serif);font-weight:500;font-size:30px;margin:0}
+.board-head .sub{color:var(--muted);font-size:14px}
+.board-head .grow{flex:1}
+.focus{font-size:13px;padding:4px 12px;border-radius:999px;background:var(--teal-soft);color:var(--teal);font-weight:500}
+.cols{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(280px,1fr);gap:14px;overflow-x:auto;padding-bottom:12px}
+.col{background:#E9EFEC;border-radius:16px;padding:12px;min-height:300px}
+.col.unfocused{background:transparent;border:1.5px dashed var(--rule)}
+.col h2{font-family:var(--serif);font-weight:500;font-size:18px;line-height:1.25;margin:2px 4px 2px}
+.col .cmeta{font-size:12px;color:var(--muted);margin:0 4px 10px;display:flex;gap:8px;align-items:center}
+.col .cmeta button{border:0;background:transparent;color:var(--teal);font-size:12px;padding:0}
+.theme{border-radius:12px;padding:10px;margin-bottom:10px;background:var(--paper);border:1px solid var(--rule)}
+.theme > .th{display:flex;align-items:center;gap:6px;font-weight:600;font-size:14px;margin-bottom:6px}
+.theme > .th .sw{width:10px;height:10px;border-radius:3px}
+.theme > .th .grow{flex:1}
+.theme > .th button{border:0;background:transparent;font-size:15px;color:var(--faint);padding:0 2px}
+.theme > .th button[aria-pressed="true"]{color:var(--teal)}
+.theme.suggested{border-style:dashed;background:#FBFDFC}
+.theme.suggested .why{font-size:12px;color:var(--muted);margin:0 0 6px}
+.card{background:var(--bg);border-radius:10px;padding:8px 10px;margin-top:6px;font-size:14px;line-height:1.35}
+.card .src{font-size:12px;color:var(--muted);margin-top:4px}
+.card[draggable]{cursor:grab}
+.loose{font-size:12px;color:var(--muted);margin:12px 4px 4px}
+.drawer{position:fixed;top:41px;right:0;bottom:0;width:340px;max-width:100vw;background:#22343A;color:#E6EFEC;padding:20px 22px;overflow:auto;z-index:45;transform:translateX(100%);transition:transform .2s ease}
+.drawer.on{transform:none}
+.drawer h2{font-size:15px;margin:0 0 4px}
+.drawer p.sub{color:#A9BCB6;font-size:13px;margin:0 0 14px}
+.drawer ul{padding-left:18px;margin:0;font-size:14px}
+.drawer li{margin-bottom:10px}
+.drawer li em{color:#A9BCB6;font-style:normal;display:block;font-size:12px}
+
+@media (max-width:960px){
+  .shell{grid-template-columns:1fr}
+  .rail{position:static;height:auto}
+  .listen{grid-template-columns:1fr;padding:20px 16px 160px}
+  .para .body{border-right:0;padding-right:0}
+  .para .note{padding:2px 0 10px 18px}
+  .dock,.endbar{left:0}
+  .toast{left:50%}
+  .rgrid{grid-template-columns:1fr}
+  .stagebar{overflow-x:auto;padding:10px 16px}
+  .choose h1{font-size:32px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="proto" role="navigation" aria-label="Mock screens">
+  <strong>Mock B: restructure around listen, reflect, make sense</strong>
+  <button data-go="choose">1 Sign in and choose</button>
+  <button data-go="listen">2 Listen</button>
+  <button data-go="reflect">3 Reflect</button>
+  <button data-go="sense">4 Make sense</button>
+  <span class="spacer"></span>
+  <button class="notes-toggle" id="notesBtn" aria-expanded="false">What changed on this screen</button>
+</div>
+
+<!-- 1 CHOOSE -->
+<section class="screen" id="choose">
+  <div class="choose">
+    <div class="signedin"><span class="avatar">HS</span>Signed in with Cortico as Harrison. <a href="#">Switch account</a></div>
+    <h1>What are you listening to this season?</h1>
+    <p class="lede">Bundle the projects you want to read across. Your notes, reflections and themes stay with the bundle, so you can come back to it, or start another.</p>
+    <div class="orgtabs" role="group" aria-label="Organization">
+      <button aria-pressed="true">American Conversation Project</button>
+      <button aria-pressed="false">Real Talk for Change</button>
+    </div>
+    <div class="tiles" id="tiles">
+      <button class="tile" aria-pressed="true" data-n="42"><span class="check">✓</span><span class="name">Main Street listening circles</span><span class="meta">42 conversations, Iowa and Nebraska</span></button>
+      <button class="tile" aria-pressed="true" data-n="18"><span class="check">✓</span><span class="name">Rural libraries series</span><span class="meta">18 conversations, 9 counties</span></button>
+      <button class="tile" aria-pressed="false" data-n="27"><span class="check">✓</span><span class="name">Veterans coming home</span><span class="meta">27 conversations</span></button>
+      <button class="tile" aria-pressed="true" data-n="11"><span class="check">✓</span><span class="name">Faith communities pilot</span><span class="meta">11 conversations</span></button>
+      <button class="tile" aria-pressed="false" data-n="35"><span class="check">✓</span><span class="name">Youth voices, summer cohort</span><span class="meta">35 conversations, no guide</span></button>
+    </div>
+    <div class="savebar">
+      <input value="Fall 2026: small-town institutions" aria-label="Bundle name">
+      <span class="sum" id="sum">3 projects, 71 conversations</span>
+      <button class="btn primary" data-go="listen">Start listening</button>
+    </div>
+  </div>
+</section>
+
+<template id="railTpl">
+  <aside class="rail">
+    <div class="brand">Notes in the Margin</div>
+    <div class="bundlebox"><div class="k">Bundle</div><div class="v">Fall 2026: small-town institutions</div><div class="k">3 projects, 71 conversations</div><button data-go="choose">Change</button></div>
+    <div>
+      <h3>Up next</h3>
+      <ul class="queue">
+        <li><button aria-current="true" data-go="listen"><span class="pip read"></span><span><span class="t">Library board neighbors, Cedar Falls</span><br><span class="s">Reading, 38%</span></span></button></li>
+        <li><button data-go="reflect"><span class="pip wait"></span><span><span class="t">Thursday coffee group</span><br><span class="s">Reflection to review</span></span></button></li>
+        <li><button data-go="listen"><span class="pip"></span><span><span class="t">Sunday supper, St. Brigid's hall</span><br><span class="s">Suggested: echoes your library notes</span></span></button></li>
+        <li><button data-go="listen"><span class="pip done"></span><span><span class="t">After the mill closed</span><br><span class="s">Reflected Oct 3</span></span></button></li>
+      </ul>
+      <a href="#" class="seeall">All 71 conversations</a>
+    </div>
+  </aside>
+</template>
+<template id="stageTpl">
+  <div class="stagebar">
+    <button class="stage" data-stage="listen" data-go="listen"><span class="n">1</span>Listen</button><span class="line"></span>
+    <button class="stage" data-stage="reflect" data-go="reflect"><span class="n">2</span>Reflect</button><span class="line"></span>
+    <button class="stage" data-stage="sense" data-go="sense"><span class="n">3</span>Make sense</button>
+    <span class="grow"></span><span class="avatar">HS</span>
+  </div>
+</template>
+
+<!-- 2 LISTEN -->
+<section class="screen" id="listen">
+  <div class="shell">
+    <div data-rail></div>
+    <div>
+      <div data-stage-for="listen"></div>
+      <div class="listen" id="page">
+        <header>
+          <h1>Library board neighbors, Cedar Falls</h1>
+          <div class="sub">Rural libraries series, Oct 14, 2026, 58 minutes, 6 people</div>
+        </header>
+
+        <div class="sec"><span class="label">A place you feel known</span><span class="rule"></span></div>
+        <div class="para">
+          <div class="body"><div class="who">Dale</div>
+          <p>When I walk into the library, Marcy knows my name before I'm through the door. <mark class="star">She knows I'm going to ask about the seed catalog and she's already pulled it.</mark> That's not nothing. That's the only place in town that happens anymore.<span class="hl-tools"><button>Star</button><button>Edit note</button><button>Remove</button></span></p></div>
+          <div class="note star">known by name, same words as the coffee group!</div>
+        </div>
+        <div class="para">
+          <div class="body"><div class="who">Ruth</div>
+          <p>It used to be the bank, too. You'd go in and Gene would ask about your mother. <mark>Now it's a screen and a phone number that goes to Omaha.</mark><span class="hl-tools"><button>Star</button><button>Add note</button><button>Remove</button></span></p></div>
+          <div class="note">institutions moving away<span class="ai">Also suggested for Trust in local institutions</span></div>
+        </div>
+        <div class="para">
+          <div class="body"><div class="who">Facilitator</div>
+          <p>What does it feel like when that changes, when the person behind the counter isn't from here?</p></div>
+          <div class="note"></div>
+        </div>
+        <div class="para">
+          <div class="body"><div class="who">Marisol</div>
+          <p>Honestly, it feels like they decided we weren't worth a person. I moved here eleven years ago and the library was how I met anyone. If they cut the hours again, I don't know where people like me would go.</p></div>
+          <div class="note"></div>
+        </div>
+
+        <div class="sec"><span class="label" style="color:var(--faint)">When trust was broken</span><span class="rule"></span><button class="set" id="setSec">Set where this starts</button></div>
+        <div class="para">
+          <div class="body"><div class="who">Dale</div>
+          <p>The board vote was the thing. They held it at two in the afternoon on a Tuesday. Who can come to that? Farmers can't. Anybody with a shift can't.</p></div>
+          <div class="note"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="dock" id="dock">
+    <div class="dock-inner">
+      <div class="audio"><button class="play" aria-label="Play">▶</button><span>22:10</span><span class="bar"><i></i></span><span>58:10</span></div>
+      <button class="rec" id="recBtn">Reflect out loud</button>
+      <div class="recpanel">
+        <span class="time">1:48</span>
+        <span class="wave" id="wave"></span>
+        <span class="prompt">What would you want to hear more about?</span>
+        <button class="btn small" id="recStop" style="background:#EAF2EF;border:0">Discard</button>
+        <button class="btn small primary" data-go="reflect" style="background:var(--mark-star);color:var(--ink);border:0">Done, show connections</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 REFLECT -->
+<section class="screen" id="reflect">
+  <div class="shell">
+    <div data-rail></div>
+    <div>
+      <div data-stage-for="reflect"></div>
+      <div class="reflect">
+        <h1>What your reflection connects to</h1>
+        <p class="lede">Shaded phrases are what each connection came from. Keep what rings true. Nothing reaches your board until you keep it.</p>
+        <div class="rgrid">
+          <div>
+            <div class="said"><div class="sub">You, after Thursday coffee group, 3 min 42 s</div>
+            The thing that keeps coming back is people saying someone "knows them." The library, the diner. <u>It's less about the service and more about being recognized.</u> And then the flip side, <u>the board meeting at 2pm, that felt like the clearest example of trust breaking.</u> Not a scandal, just a time nobody could make.</div>
+            <div class="tray"><b style="color:var(--ink)">1 starred passage</b> isn't connected yet: "Now it's a screen and a phone number that goes to Omaha." <button class="btn small">Connect it</button> <button class="btn small quiet">Later</button></div>
+          </div>
+          <div>
+            <div class="cand" data-c>
+              <div class="to">Belonging</div>
+              <div class="ins">Belonging is described as being recognized by name, more than as access to services.</div>
+              <div class="ev">"Marcy knows my name before I'm through the door."<small>Your starred highlight</small></div>
+              <div class="acts"><button class="btn small" data-keep>Keep</button><button class="btn small">Reword</button><button class="btn small quiet" data-skip>Skip</button></div>
+            </div>
+            <div class="cand" data-c>
+              <div class="to">Trust in local institutions</div>
+              <div class="ins">Trust erodes through access decisions, like meeting times, not through scandal.</div>
+              <div class="ev">"They held it at two in the afternoon on a Tuesday."<small>Passage the AI found</small></div>
+              <div class="acts"><button class="btn small" data-keep>Keep</button><button class="btn small">Reword</button><button class="btn small quiet" data-skip>Skip</button></div>
+            </div>
+            <div class="cand" data-c>
+              <div class="to" style="color:var(--muted)">No question yet</div>
+              <div class="ins">Diners and libraries play similar roles as places of recognition.</div>
+              <div class="acts"><button class="btn small" data-keep>Keep</button><button class="btn small">Reword</button><button class="btn small quiet" data-skip>Skip</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="endbar"><span class="grow" id="rcount"></span><button class="btn quiet">Come back later</button><button class="btn primary" id="keepBtn">Put 0 on the board</button></div>
+  <div class="toast" id="toast"><span>On the board.</span><a href="#" data-go="sense">Go to Make sense</a></div>
+</section>
+
+<!-- 4 MAKE SENSE -->
+<section class="screen" id="sense">
+  <div class="shell">
+    <div data-rail></div>
+    <div>
+      <div data-stage-for="sense"></div>
+      <div class="board">
+        <div class="board-head">
+          <div><h1>Make sense</h1><div class="sub">One column per research question. Themes group your insights. Drag an insight between themes.</div></div>
+          <span class="grow"></span>
+          <span class="focus">3 of 5 to 7 questions in focus</span>
+          <button class="btn">Suggest themes</button>
+          <button class="btn primary">Export codebook</button>
+        </div>
+        <div class="cols">
+          <section class="col">
+            <h2>How do people describe trust in local institutions?</h2>
+            <div class="cmeta">9 insights, 2 themes <button>Edit</button></div>
+            <div class="theme"><div class="th"><span class="sw" style="background:#0E6E68"></span>Access and exclusion<span class="grow"></span><button aria-pressed="true" title="In codebook">★</button></div>
+              <div class="card" draggable="true">Trust erodes through access decisions, like meeting times, not scandal.<div class="src">Library board neighbors</div></div>
+              <div class="card" draggable="true">Meeting notices only posted online shut out older residents.<div class="src">Thursday coffee group</div></div>
+            </div>
+            <div class="theme"><div class="th"><span class="sw" style="background:#3B4C8C"></span>Institutions leaving<span class="grow"></span><button aria-pressed="false" title="Add to codebook">☆</button></div>
+              <div class="card" draggable="true">Centralizing reads as a judgment that the town isn't worth a person.<div class="src">Library board neighbors</div></div>
+            </div>
+            <div class="loose">Not in a theme yet</div>
+            <div class="card" draggable="true">The fire department is trusted because it's volunteer.<div class="src">After the mill closed</div></div>
+          </section>
+          <section class="col">
+            <h2>What does belonging to this community feel like?</h2>
+            <div class="cmeta">12 insights, 1 theme <button>Edit</button></div>
+            <div class="theme"><div class="th"><span class="sw" style="background:#C4553A"></span>Being known by name<span class="grow"></span><button aria-pressed="true">★</button></div>
+              <div class="card" draggable="true">Belonging is being recognized, more than access to services.<div class="src">Library board neighbors</div></div>
+              <div class="card" draggable="true">Newcomers describe the library as the first place anyone learned their name.<div class="src">Bookmobile volunteers</div></div>
+            </div>
+            <div class="theme suggested"><div class="th"><span class="sw" style="background:#8E9BA1"></span>Suggested: third places<span class="grow"></span></div>
+              <p class="why">From 3 insights that mention diners, halls and libraries.</p>
+              <button class="btn small">Keep theme</button> <button class="btn small quiet">Dismiss</button>
+            </div>
+          </section>
+          <section class="col">
+            <h2>Where do people feel friction or disconnection?</h2>
+            <div class="cmeta">4 insights <button>Edit</button></div>
+            <div class="card" draggable="true">Shift workers feel left out of civic life by default.<div class="src">Library board neighbors</div></div>
+          </section>
+          <section class="col unfocused">
+            <h2 style="color:var(--muted)">No question yet</h2>
+            <div class="cmeta">3 insights <button>+ New question</button></div>
+            <div class="card" draggable="true">Diners and libraries play similar roles as places of recognition.<div class="src">Thursday coffee group</div></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<aside class="drawer" id="drawer" aria-label="What changed"><div id="drawerBody"></div></aside>
+
+<script>
+const NOTES={
+  choose:{t:"Sign in and choose",s:"Sign-in and project choice on one screen. You land here right after Cortico sign-in.",i:[
+    ["Projects shown as tiles you toggle, grouped by organization","Only projects the account can open in American Conversation Project, or any other organization it belongs to."],
+    ["A bundle gets a name and is saved","Bundles become the unit your notes, research questions and themes belong to. Today everything is global to one hard-coded user."],
+    ["A running count of projects and conversations","Shows the size of the bundle before you start."]]},
+  listen:{t:"Listen",s:"The Reader, rebuilt around the margin.",i:[
+    ["Notes are written in the margin beside the passage, in a hand font","The one bold move in this direction. It makes the app's name literal."],
+    ["The left rail is a queue, not a dropdown","It shows progress dots, what needs review, and the next suggestion. That replaces the 201-item select, the orange banner and the separate \"listen next\" list."],
+    ["Guide sections are inline headings","\"Set where this starts\" sits on the heading itself. That replaces the invisible hover strip and the word \"checkpoint\"."],
+    ["Star, note and remove show on hover or focus beside each highlight","Today you can't remove a highlight in the UI, and starring is an unmarked click."],
+    ["Audio and recording share one dock at the bottom","Recording no longer covers the page. Prompts rotate inside the dock. Try \"Reflect out loud\"."],
+    ["No research question editing here","Questions live on Make sense."]]},
+  reflect:{t:"Reflect",s:"The review dialog, as a full step.",i:[
+    ["Shaded phrases in your reflection show where each connection came from","This replaces the raw \"confidence: 0.7\" and rationale strings."],
+    ["Keep, Reword and Skip","The footer counts decisions and names the result: \"Put 2 on the board\". A confirmation follows."],
+    ["One tray for starred passages that aren't used yet","The same wording appears everywhere they show up."],
+    ["\"Come back later\" keeps undecided choices","The rail then shows the conversation as \"Reflection to review\"."]]},
+  sense:{t:"Make sense",s:"Memo and Organize merged into one board.",i:[
+    ["One column per research question, themes inside, insights as cards","It is the same data as today's memo, laid out for synthesis."],
+    ["\"Themes\" replaces \"code families\"","The ★ on a theme means \"in codebook\". That is the only star meaning on this screen."],
+    ["Focus is the set of columns","Unfocused questions and \"No question yet\" sit at the end with dashed borders."],
+    ["AI-suggested themes look visibly tentative (dashed)","Keep or Dismiss. The cap message only appears when you hit it."],
+    ["Export codebook is a primary action with a clear name","It replaces \"Prepare codebook\", whose only explanation was a hover tooltip."]]}
+};
+let current='choose';
+const rail=document.getElementById('railTpl'), stage=document.getElementById('stageTpl');
+document.querySelectorAll('[data-rail]').forEach(el=>el.replaceWith(rail.content.cloneNode(true)));
+document.querySelectorAll('[data-stage-for]').forEach(el=>{
+  const n=stage.content.cloneNode(true), s=el.dataset.stageFor, order=['listen','reflect','sense'];
+  n.querySelectorAll('.stage').forEach(b=>{ if(b.dataset.stage===s) b.setAttribute('aria-current','step'); if(order.indexOf(b.dataset.stage)<order.indexOf(s)) b.classList.add('done'); });
+  el.replaceWith(n);
+});
+function go(id){current=id;document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));
+  document.querySelectorAll('.proto [data-go]').forEach(b=>b.setAttribute('aria-current',b.dataset.go===id));
+  document.getElementById('dock').classList.remove('recording');renderNotes();window.scrollTo(0,0);}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-go]');if(t){e.preventDefault();go(t.dataset.go);}});
+const drawer=document.getElementById('drawer'),nb=document.getElementById('notesBtn');
+nb.onclick=()=>{const on=!drawer.classList.contains('on');drawer.classList.toggle('on',on);nb.setAttribute('aria-expanded',on);};
+function renderNotes(){const n=NOTES[current];document.getElementById('drawerBody').innerHTML=`<h2>${n.t}</h2><p class="sub">${n.s}</p><ul>${n.i.map(([a,b])=>`<li>${a}${b?`<em>${b}</em>`:''}</li>`).join('')}</ul>`;}
+
+/* tiles */
+function sum(){const on=[...document.querySelectorAll('.tile[aria-pressed="true"]')];document.getElementById('sum').textContent=`${on.length} project${on.length===1?'':'s'}, ${on.reduce((a,t)=>a+ +t.dataset.n,0)} conversations`;}
+document.querySelectorAll('.tile').forEach(t=>t.onclick=()=>{t.setAttribute('aria-pressed',t.getAttribute('aria-pressed')!=='true');sum();});
+document.querySelectorAll('.orgtabs button').forEach(b=>b.onclick=()=>document.querySelectorAll('.orgtabs button').forEach(x=>x.setAttribute('aria-pressed',x===b)));
+
+/* listen */
+document.querySelectorAll('#page mark').forEach(m=>m.onclick=()=>m.classList.toggle('star'));
+document.querySelectorAll('.hl-tools button').forEach(b=>{ if(b.textContent==='Star') b.onclick=()=>b.closest('p').querySelector('mark').classList.toggle('star'); });
+document.getElementById('setSec').onclick=e=>{const s=e.target.closest('.sec');s.querySelector('.label').style.color='';e.target.remove();};
+const dock=document.getElementById('dock');
+document.getElementById('recBtn').onclick=()=>dock.classList.add('recording');
+document.getElementById('recStop').onclick=()=>dock.classList.remove('recording');
+const wave=document.getElementById('wave');for(let i=0;i<60;i++){const b=document.createElement('i');b.style.height=(4+Math.round(Math.abs(Math.sin(i*0.9)*Math.cos(i*0.3))*24))+'px';wave.appendChild(b);}
+
+/* reflect */
+function upd(){const c=[...document.querySelectorAll('[data-c]')],k=c.filter(x=>x.classList.contains('kept')).length,l=c.filter(x=>!x.classList.contains('kept')&&!x.classList.contains('skipped')).length;
+  document.getElementById('rcount').textContent=l?`${l} still to decide, ${k} kept`:`All decided, ${k} kept`;const b=document.getElementById('keepBtn');b.textContent=`Put ${k} on the board`;b.disabled=!k;}
+document.querySelectorAll('[data-c]').forEach(c=>{c.querySelector('[data-keep]').onclick=()=>{c.classList.add('kept');c.classList.remove('skipped');upd();};c.querySelector('[data-skip]').onclick=()=>{c.classList.add('skipped');c.classList.remove('kept');upd();};});
+upd();
+document.getElementById('keepBtn').onclick=()=>{const t=document.getElementById('toast');t.classList.add('on');setTimeout(()=>t.classList.remove('on'),4000);};
+
+/* board star toggles */
+document.querySelectorAll('.theme .th button[aria-pressed]').forEach(b=>b.onclick=()=>{const on=b.getAttribute('aria-pressed')!=='true';b.setAttribute('aria-pressed',on);b.textContent=on?'★':'☆';});
+go('choose');
+</script>
+</body>
+</html>
