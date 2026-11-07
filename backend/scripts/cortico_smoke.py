@@ -33,6 +33,7 @@ def main() -> None:
     p.add_argument("--api", default="http://localhost:8000")
     p.add_argument("--org", type=int, required=True, help="Cortico organization id, e.g. 353")
     p.add_argument("--projects", type=int, nargs="*", help="project ids for the workspace (default: first one)")
+    p.add_argument("--project-name", help="use the first project whose name contains this text (case-insensitive)")
     p.add_argument("--email")
     p.add_argument("--write-highlight", action="store_true")
     a = p.parse_args()
@@ -51,6 +52,15 @@ def main() -> None:
         if not projects:
             sys.exit("No projects in that organization are open to this account.")
         chosen = a.projects or [projects[0]["id"]]
+        if a.project_name:
+            matches = [x for x in projects if a.project_name.lower() in (x.get("name") or "").lower()]
+            print(f"    projects matching {a.project_name!r}:")
+            for m in matches:
+                print(f"      {m['id']}: {m['name']}")
+            if not matches:
+                sys.exit(f"No project in {a.org} has {a.project_name!r} in its name.")
+            chosen = [matches[0]["id"]]
+            print(f"    using {chosen[0]}")
         ws = step("save workspace", c.post("/workspaces", json={"name": "Smoke test", "organization_id": a.org, "project_ids": chosen}))
         convs = step("conversations", c.get("/conversations"))
         print(f"    {len(convs)} conversations in workspace {ws['id']}")
