@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from ..auth import CurrentUser, current_user, get_source
 from ..config import get_config
 from ..cortico.source import CorticoSource
-from ..cortico.write_back import delete_highlight_copy, push_highlight, sync_status
+from ..cortico.write_back import delete_highlight_copy, detach_deleted_highlight, push_highlight, sync_status
 from ..db import get_prototype_db
 from ..models_prototype import HighlightSnippet, RLHighlight
 from ..schemas import HighlightCreate, HighlightUpdate
@@ -145,7 +145,11 @@ def delete_highlight(
     sync = None
     if source.kind == "cortico_api":
         row = delete_highlight_copy(prototype_db, source, highlight.id)
-        sync = {"status": row.status, "cortico_id": row.cortico_id, "error": row.error} if row else None
+        if row is None or row.cortico_id is None:
+            sync = {"status": "not_in_cortico", "cortico_id": None, "error": None}
+        else:
+            sync = {"status": row.status, "cortico_id": row.cortico_id, "error": row.error}
+    detach_deleted_highlight(prototype_db, highlight.id)
     prototype_db.delete(highlight)
     prototype_db.commit()
     return {"deleted": True, "cortico_sync": sync}

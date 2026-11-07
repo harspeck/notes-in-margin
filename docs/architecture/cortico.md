@@ -61,7 +61,10 @@ columns.
     project itself, or an organization-wide role.
   - The active workspace is per session (`rl_session.active_workspace_id`). Otherwise it is
     the most recently updated one.
-- **Write-back (`app/cortico/write_back.py`).**
+- **Write-back (`app/cortico/write_back.py`).** The payload is `conversation_id`, then
+  `project_id` when known, otherwise `forum_id` (never both: Cortico answers "Only one filter
+  may be provided at once."), then `title`, `notes` and `snippets`. That is the shape
+  llm-auto-highlighter sends.
   - A highlight is saved locally first, then pushed with `POST /v2/highlights`. Each
     highlight gets one `rl_cortico_sync` row, with status `synced`, `failed` (retry with
     `POST /highlights/{id}/cortico_sync`), `skipped` (the shape can't be represented) or

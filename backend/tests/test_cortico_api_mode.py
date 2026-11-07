@@ -111,6 +111,8 @@ class FakeCortico:
             ], "page_info": {"count": 2, "cursor": None, "total": 2}})
         if path == "/v2/highlights" and request.method == "POST":
             body = json.loads(request.content)
+            if body.get("project_id") is not None and body.get("forum_id") is not None:
+                return httpx.Response(400, json={"detail": {"message": "Only one filter may be provided at once."}})
             self.highlights_created.append(body)
             return httpx.Response(200, json={"id": 88000 + len(self.highlights_created), "title": body["title"], "is_active": True})
         if path.startswith("/v2/highlights/") and request.method == "DELETE":
@@ -213,9 +215,9 @@ def test_highlight_is_written_back_with_inclusive_word_indices(fake):
         {"uuid": "u1", "word_indices": {"start_index": 3, "end_index": 4}},
         {"uuid": "u2", "word_indices": {"start_index": 0, "end_index": 1}},
     ]
-    assert (sent["conversation_id"], sent["project_id"], sent["forum_id"]) == (7001, 501, 11)
+    assert (sent["conversation_id"], sent["project_id"]) == (7001, 501)
+    assert "forum_id" not in sent  # Cortico rejects project_id and forum_id together
     assert sent["title"] == "my name" and sent["notes"] == "known by name"
-    assert sent["is_auto_highlight"] is False
 
     # Retrying an already-synced highlight never creates a second Cortico copy.
     again = client.post(f"/highlights/{h['id']}/cortico_sync").json()
@@ -238,6 +240,7 @@ def test_non_contiguous_highlight_saves_locally_and_is_skipped(fake):
     assert h["id"]
     assert h["cortico_sync"]["status"] == "skipped"
     assert fake.highlights_created == []
+    assert client.delete(f"/highlights/{h['id']}").json()["cortico_sync"]["status"] == "not_in_cortico"
 
 
 def test_expired_access_token_refreshes_once_and_rotates(fake):

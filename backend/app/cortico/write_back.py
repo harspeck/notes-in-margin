@@ -81,16 +81,20 @@ def push_highlight(db: Session, source: ApiSource, highlight: RLHighlight, conve
         first_words = " ".join(
             w["word"] for w in next(s for s in snippets if s.id == spans[0][0]).words[spans[0][1] : spans[0][2]]
         )
+        # The same shape llm-auto-highlighter sends. Cortico treats project_id and forum_id
+        # as alternative placements and rejects both at once ("Only one filter may be
+        # provided at once."), so send the project when known, else the forum.
+        placement = (
+            {"project_id": conversation.project_id}
+            if conversation.project_id is not None
+            else {"forum_id": conversation.forum_id}
+        )
         payload = {
             "conversation_id": conversation.id,
-            "project_id": conversation.project_id,
-            "forum_id": conversation.forum_id,
+            **placement,
             "title": highlight.title or (first_words[:80] or f"Highlight {highlight.id}"),
             "notes": highlight.notes,
             "snippets": payload_snippets,
-            "tool_id": tool_id,
-            "is_auto_highlight": False,
-            "metadata": {"source": tool_id, "local_highlight_id": highlight.id},
         }
         created = source.client.create_highlight(payload)
         row.cortico_id = created.get("id")
@@ -127,6 +131,23 @@ def delete_highlight_copy(db: Session, source: ApiSource, highlight_id: int) -> 
         row.error = f"delete failed: {exc.detail}"
     db.commit()
     return row
+
+
+def detach_deleted_highlight(db: Session, highlight_id: int) -> None:
+    """Called when the local highlight row is deleted. The sync row stays as the record of
+    what was created in Cortico, but under another kind, so a later highlight that reuses
+    the id (SQLite reuses ids) never inherits it."""
+    row = (
+        db.query(RLCorticoSync)
+        .filter(RLCorticoSync.local_kind == "highlight", RLCorticoSync.local_id == highlight_id)
+        .one_or_none()
+    )
+    if row is None:
+        return
+    db.query(RLCorticoSync).filter(
+        RLCorticoSync.local_kind == "deleted_highlight", RLCorticoSync.local_id == highlight_id
+    ).delete()
+    row.local_kind = "deleted_highlight"
 
 
 def sync_status(db: Session, highlight_ids: list[int]) -> dict[int, dict]:
