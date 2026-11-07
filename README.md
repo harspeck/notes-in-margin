@@ -11,14 +11,15 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 ```
 
-To enable the AI review step, create `backend/.env`:
+To enable the AI steps (review, next steps, code families), create `backend/.env`:
 
 ```
-OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Without it, everything works except `POST /voice_memos/{id}/review` (the AI-proposed RQ
-connections). faster-whisper downloads its model (`small.en`, ~500MB) on first
+Without it, everything works except those AI steps, which answer 503. To use OpenAI instead,
+set `OPENAI_API_KEY` there and run with `AI_PROVIDER=openai AI_MODEL=gpt-5.6-luna`.
+faster-whisper downloads its model (`small.en`, ~500MB) on first
 transcription — needs network once, runs local after that.
 
 ```sh

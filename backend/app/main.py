@@ -11,6 +11,7 @@ from . import models_prototype  # noqa: F401 — registers tables on PrototypeBa
 from .auth import current_user
 from .config import get_config
 from .cortico.errors import CorticoError
+from .llm import AIProviderError
 from .db import PrototypeBase, PrototypeSession, prototype_engine
 from .routers import (
     auth,
@@ -61,6 +62,11 @@ def _cortico_error(_request: Request, exc: CorticoError):
         status_code=exc.status,
         headers=headers,
     )
+
+
+@app.exception_handler(AIProviderError)
+def _ai_error(_request: Request, exc: AIProviderError):
+    return JSONResponse({"detail": exc.detail, "source": "ai"}, status_code=exc.status_code)
 
 
 try:

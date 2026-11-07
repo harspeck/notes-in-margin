@@ -15,12 +15,12 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from openai import OpenAI
 from sqlalchemy.orm import Session
 
 from ..config import Config, get_config
 from ..evidence_provenance import highlight_spans, resolve_evidence
 from ..cortico.source import as_source
+from ..llm import structured_json
 from ..models_prototype import (
     AppSetting,
     ConnectionEvidence,
@@ -226,31 +226,17 @@ def generate_connections(
         ),
     }
 
-    client = OpenAI()
-    response = client.responses.create(
-        model=config.ai_review.model,
-        reasoning={"effort": config.ai_review.reasoning_effort},
-        input=[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": json.dumps(payload)},
-        ],
-        text={
-            "format": {
-                "type": "json_schema",
-                "name": "reflection_review",
-                "schema": _OUTPUT_SCHEMA,
-                "strict": True,
-            }
-        },
+    answer = structured_json(
+        system=prompt, user=json.dumps(payload), schema=_OUTPUT_SCHEMA, name="reflection_review"
     )
-    result = json.loads(response.output_text)
     return persist_review_result(
         prototype_db=prototype_db,
         cortico_db=cortico_db,
         voice_memo=voice_memo,
-        result=result,
+        result=answer.data,
         prompt=prompt,
         config=config,
+        model=answer.model,
     )
 
 
@@ -262,6 +248,7 @@ def persist_review_result(
     result: dict,
     prompt: str,
     config: Config,
+    model: str | None = None,
 ) -> list[ReflectionConnection]:
     """Validates and persists the model's parsed output. Split from the API call so the
     deterministic half (validation, highlight linking) is testable without a model.
@@ -304,7 +291,7 @@ def persist_review_result(
             status="suggested",
             ai_metadata=json.dumps(
                 {
-                    "model": config.ai_review.model,
+                    "model": model or config.ai_review.model,
                     "reasoning_effort": config.ai_review.reasoning_effort,
                     "prompt": prompt,
                     "confidence": conn.get("confidence"),

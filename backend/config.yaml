@@ -27,8 +27,10 @@ prototype_db_path: "db/prototype.db"
 audio_dir: "db/local/audio"
 
 ai_review:
-  model: "gpt-5.6-luna"
+  provider: "anthropic"
+  model: "claude-opus-5-5"
   reasoning_effort: "low"
+  max_output_tokens: 32000
 
 transcription:
   engine: "faster-whisper (local)"

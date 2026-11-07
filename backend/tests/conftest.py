@@ -10,8 +10,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # test rows (RQs, highlights, voice memos...) behind in db/prototype.db, the real dev
 # database.
 # A DATABASE_URL in the shell (say, after `vercel env pull`) would send test rows to the real
-# Postgres sidecar, and DATA_SOURCE would switch modes. Tests always use scratch SQLite.
-for _var in ("DATABASE_URL", "POSTGRES_URL", "DATA_SOURCE", "SESSION_SECRET"):
+# Postgres sidecar, DATA_SOURCE would switch modes, and the AI_* overrides would change the
+# model config the tests assert on. Tests always use scratch SQLite.
+for _var in ("DATABASE_URL", "POSTGRES_URL", "DATA_SOURCE", "SESSION_SECRET", "AI_PROVIDER", "AI_MODEL", "AI_REASONING_EFFORT"):
     os.environ.pop(_var, None)
 os.environ.setdefault("PROTOTYPE_DB_PATH", os.path.join(tempfile.mkdtemp(), "test_prototype.db"))
 

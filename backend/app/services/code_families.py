@@ -10,11 +10,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from openai import OpenAI
 from sqlalchemy.orm import Session
 
 from ..config import CodeFamiliesConfig, Config
 from ..evidence_text import quoted_texts
+from ..llm import structured_json
 from ..models_prototype import (
     CodeFamily,
     CodeFamilyMember,
@@ -411,27 +411,13 @@ def synthesize_code_families(
         "propose_merges": cap.near_cap,
     }
 
-    client = OpenAI()
-    response = client.responses.create(
-        model=config.ai_review.model,
-        reasoning={"effort": config.ai_review.reasoning_effort},
-        input=[
-            {"role": "system", "content": CODE_FAMILY_PROMPT},
-            {"role": "user", "content": json.dumps(payload)},
-        ],
-        text={
-            "format": {
-                "type": "json_schema",
-                "name": "code_families",
-                "schema": _OUTPUT_SCHEMA,
-                "strict": True,
-            }
-        },
+    answer = structured_json(
+        system=CODE_FAMILY_PROMPT, user=json.dumps(payload), schema=_OUTPUT_SCHEMA, name="code_families"
     )
-    result = json.loads(response.output_text)
+    result = answer.data
     ai_metadata = {
-        "model": config.ai_review.model,
-        "reasoning_effort": config.ai_review.reasoning_effort,
+        "model": answer.model,
+        "reasoning_effort": answer.reasoning_effort,
         "prompt": CODE_FAMILY_PROMPT,
         "override_cap": override_cap,
     }

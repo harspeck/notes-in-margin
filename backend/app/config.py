@@ -9,12 +9,14 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BACKEND_DIR / ".env")  # OPENAI_API_KEY lives here, never committed
+load_dotenv(BACKEND_DIR / ".env")  # ANTHROPIC_API_KEY (and OPENAI_API_KEY) live here, never committed
 
 
 class AIReviewConfig(BaseModel):
+    provider: str = "anthropic"  # "anthropic" or "openai"; see app/llm.py
     model: str
     reasoning_effort: str
+    max_output_tokens: int = 32000
 
 
 class TranscriptionConfig(BaseModel):
@@ -118,6 +120,9 @@ def get_config() -> Config:
         raw.setdefault("cortico", {})["base_url"] = os.environ["CORTICO_BASE_URL"]
     if os.environ.get("SESSION_COOKIE_SAMESITE"):
         raw.setdefault("session", {})["cookie_samesite"] = os.environ["SESSION_COOKIE_SAMESITE"]
+    for env, key in (("AI_PROVIDER", "provider"), ("AI_MODEL", "model"), ("AI_REASONING_EFFORT", "reasoning_effort")):
+        if os.environ.get(env):
+            raw.setdefault("ai_review", {})[key] = os.environ[env]
     if raw.get("data_source") not in ("snapshot", "cortico_api"):
         raise ValueError(f"data_source must be 'snapshot' or 'cortico_api', got {raw.get('data_source')!r}")
     return Config.model_validate(raw)

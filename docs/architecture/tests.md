@@ -27,7 +27,7 @@ need no network, API key or running server.
   - the guide codes "Consent", "Guidelines" and "Q1 Intros"
 - **No lifespan:** routers are exercised with `TestClient(app)` outside a `with` block, so
   the lifespan (`create_all` and the RQ seed) does not run.
-- **No model:** no test calls OpenAI or loads Whisper. Logic that runs after an LLM call is
+- **No model:** no test calls Claude or OpenAI or loads Whisper. Logic that runs after an LLM call is
   tested by feeding hand-built model output to the helpers. A live round trip is checked by
   hand, and only with the user's go-ahead, because it costs money.
 

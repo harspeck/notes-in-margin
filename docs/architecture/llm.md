@@ -2,17 +2,35 @@
 
 ## Provider and configuration
 
-- **SDK:** `openai==3.24.0`. Clients are created with `OpenAI()` and no arguments, so they
-  read `OPENAI_API_KEY` and `OPENAI_BASE_URL` from the environment. `backend/app/config.py`
-  loads both from `backend/.env`.
-- **API:** the Responses API, `client.responses.create(...)`, with
-  `text={"format": {"type": "json_schema", "strict": True, ...}}`.
-- **Model:** `ai_review.model: "gpt-5.6-luna"` and `reasoning_effort: "low"` in
-  `backend/config.yaml`. Both were checked against OpenAI's docs on 2026-10-05
-  (`docs/prototype-log.md`).
-- **Timeouts and retries:** none are set, so the SDK defaults apply.
-- **Errors:** exceptions are not caught, so an OpenAI failure reaches the client as a bare
-  500. This is a known gap.
+Every model call goes through `structured_json` in `backend/app/llm.py`. It takes a system
+prompt, a JSON user message and a JSON schema, and returns the parsed object plus the model
+that answered.
+
+- **Provider:** `ai_review.provider` in `backend/config.yaml`, `"anthropic"` (the default)
+  or `"openai"`. The env vars `AI_PROVIDER`, `AI_MODEL` and `AI_REASONING_EFFORT` override
+  the config, so a local run can go back to OpenAI with
+  `AI_PROVIDER=openai AI_MODEL=gpt-5.6-luna`.
+- **Claude (default):** `anthropic==2.6.0`, model `claude-opus-5-5`, effort `low`.
+  - The client reads `ANTHROPIC_API_KEY` from the environment (`backend/.env` locally, the
+    Vercel env in production).
+  - Requests stream through `client.beta.messages.stream(...)` and use
+    `output_config={"effort": ..., "format": {"type": "json_schema", "schema": ...}}`.
+  - Thinking is left at the model's default (adaptive; Opus 5.5 can't turn it off), and
+    `effort` is the only depth control.
+  - `anthropic_schema` rewrites `{"type": [X, "null"]}` as `anyOf` before sending.
+  - Server-side fallback is on (`fallbacks="default"`, beta `server-side-fallback-2026-07-01`):
+    if Claude declines on policy grounds, the API reruns the request on a fallback model.
+    `ai_metadata.model` records the model that actually answered.
+  - `max_output_tokens: 32000`. Timeout 280 s (under Vercel's 300 s limit), 2 SDK retries on
+    429, 5xx and network errors.
+- **OpenAI (selectable):** `openai==3.24.0`, the Responses API with
+  `text={"format": {"type": "json_schema", "strict": True, ...}}`. It reads `OPENAI_API_KEY`
+  and `OPENAI_BASE_URL`.
+- **Errors:** every provider failure becomes `AIProviderError`, which `main.py` answers as
+  `{"detail": ..., "source": "ai"}`:
+  - 503 for a bad or missing key, rate limits, overload and network errors;
+  - 422 when Claude declines (`stop_reason: "refusal"`) and the fallback declines too;
+  - 502 for a rejected request, a cut-off answer (`max_tokens`) or JSON that doesn't parse.
 
 ## Call sites
 
@@ -25,7 +43,7 @@
 
 ## Rules
 
-- Every AI-written row has `status="suggested"` and `ai_metadata` (`model`,
+- Every AI-written row has `status="suggested"` and `ai_metadata` (`model`, the one that answered,
   `reasoning_effort`, `prompt`, plus `confidence`, `rationale` and `reflection_timestamp`
   for connections). Only user actions move a row past suggested.
 - Model ids and effort come from `config.ai_review`. The single deliberate exception is the
@@ -34,8 +52,11 @@
   (`get_review_prompt`, `set_review_prompt`, `reset_review_prompt`), with
   `DEFAULT_REVIEW_PROMPT` as the fallback.
 - The gist backfill is not an endpoint and is not triggered from the UI, by decision
-  (`docs/prd-phase-2.md`). It makes about 200 paid calls; the measured run took 720.7 s for
-  198 calls, with 279,579 input and 29,813 output tokens.
+  (`docs/prd-phase-2.md`). It makes about 200 paid calls; the measured OpenAI run took
+  720.7 s for 198 calls, with 279,579 input and 29,813 output tokens. Claude counts tokens
+  differently, so re-measure before quoting a cost.
+- Tests replace the Claude client with a fake (`tests/test_llm.py` patches
+  `llm._anthropic_client`), so no test calls a model.
 
 ## Transcription
 

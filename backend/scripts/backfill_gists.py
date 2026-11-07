@@ -19,10 +19,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from openai import OpenAI  # noqa: E402
-
 from app.config import get_config  # noqa: E402
 from app.db import CorticoSession, PrototypeBase, PrototypeSession, prototype_engine  # noqa: E402
+from app.llm import structured_json  # noqa: E402
 from app.models_cortico import Community, Conversation, Forum, Project, Snippet  # noqa: E402
 from app.models_prototype import ConversationGist  # noqa: E402
 
@@ -96,7 +95,6 @@ def backfill(*, limit: int | None = None, dry_run: bool = False) -> None:
 
     cortico_db = CorticoSession()
     prototype_db = PrototypeSession()
-    client = OpenAI()
 
     try:
         existing_ids = {row.conversation_id for row in prototype_db.query(ConversationGist.conversation_id)}
@@ -129,27 +127,13 @@ def backfill(*, limit: int | None = None, dry_run: bool = False) -> None:
                       f"— {len(snippets)} sample snippets")
                 continue
 
-            response = client.responses.create(
-                model=config.ai_review.model,
-                reasoning={"effort": "low"},
-                input=[
-                    {"role": "system", "content": GIST_PROMPT},
-                    {"role": "user", "content": json.dumps(payload)},
-                ],
-                text={
-                    "format": {
-                        "type": "json_schema",
-                        "name": "conversation_gist",
-                        "schema": _OUTPUT_SCHEMA,
-                        "strict": True,
-                    }
-                },
+            answer = structured_json(
+                system=GIST_PROMPT, user=json.dumps(payload), schema=_OUTPUT_SCHEMA,
+                name="conversation_gist", effort="low",
             )
-            result = json.loads(response.output_text)
-            usage = getattr(response, "usage", None)
-            if usage is not None:
-                total_input_tokens += getattr(usage, "input_tokens", 0) or 0
-                total_output_tokens += getattr(usage, "output_tokens", 0) or 0
+            result = answer.data
+            total_input_tokens += answer.input_tokens
+            total_output_tokens += answer.output_tokens
 
             prototype_db.add(
                 ConversationGist(
@@ -173,8 +157,7 @@ def backfill(*, limit: int | None = None, dry_run: bool = False) -> None:
         print(f"\nDone: {len(todo)} gists generated in {elapsed:.1f}s "
               f"({elapsed / len(todo):.2f}s/call avg).")
         print(f"Token usage: {total_input_tokens} input + {total_output_tokens} output tokens "
-              f"across {len(todo)} calls. (No published per-token price for "
-              f"{config.ai_review.model} in this environment to convert that to a dollar figure.)")
+              f"across {len(todo)} calls on {config.ai_review.model}.")
     finally:
         cortico_db.close()
         prototype_db.close()

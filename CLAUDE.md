@@ -19,7 +19,7 @@ When unsure, go one tier higher.
 researcher reads Cortico conversation transcripts, highlights passages, records voice memos
 that are transcribed locally, and files AI-suggested research-question (RQ) connections, next
 steps and code families into a memo. The stack is FastAPI + SQLAlchemy (`backend/`) over two
-SQLite files, OpenAI's Responses API, local faster-whisper, and React 19 + Vite +
+SQLite files, Claude through the Anthropic SDK (`app/llm.py`), local faster-whisper, and React 19 + Vite +
 TypeScript (`frontend/`). Source data is `acp_pipeline_snapshot.db`, a read-only snapshot of
 the Cortico pipeline (201 conversations, 54 projects); everything the app writes goes to
 `db/prototype.db`.
@@ -46,7 +46,7 @@ Every command below was run and worked on 2026-10-26.
 | Setup (frontend) | `cd frontend && npm install` |
 | Run backend | `cd backend && .venv/bin/uvicorn app.main:app --port 8000` (no `--reload`; `GET /health` → `{"ok":true}`) |
 | Run frontend | `cd frontend && npm run dev`, then open http://localhost:5173 |
-| Test | `cd backend && OPENAI_API_KEY=sk-fake .venv/bin/python -m pytest -q` (102 tests, about 1.5 s) |
+| Test | `cd backend && OPENAI_API_KEY=sk-fake .venv/bin/python -m pytest -q` (110 tests, about 3.5 s) |
 | Create sidecar tables | `cd backend && .venv/bin/python scripts/init_db.py --env-file .env.local` (after `vercel env pull`; idempotent) |
 | Live Cortico check | `cd backend && .venv/bin/python scripts/cortico_smoke.py --api <url> --org 353` (the user runs it; it prompts for their Cortico password) |
 | Deploy (preview) | `cd backend && vercel deploy . --project notes-in-the-margin-api --environment preview --yes --scope harrisonspeck-8050s-projects` |
@@ -58,7 +58,7 @@ Every command below was run and worked on 2026-10-26.
 - **Ports are fixed locally:** the backend must be on 8000 and the frontend on 5173, because `frontend/src/lib/api.ts` hard-codes `BASE = "http://localhost:8000"` and there is no Vite proxy. CORS comes from `cors_origins` (env `CORS_ORIGINS`, comma-separated) and allows credentials, for the session cookie.
 - **Always deploy with `--project`:** a bare `vercel deploy` sees `frontend/` and `backend/` in the git repo, writes a root `vercel.json` with services, and creates and ships a new project. That happened once (the stray `reflective-listening` project, 2026-11-06).
 - **Tests never use a real database:** `tests/conftest.py` drops `DATABASE_URL`, `POSTGRES_URL`, `DATA_SOURCE` and `SESSION_SECRET` before importing the app. `tests/test_cortico_api_mode.py` runs `cortico_api` mode against an `httpx.MockTransport` fake of Cortico (set `app.auth.TRANSPORT`).
-- **What tests need:** no network, no API key (they pass with a fake `OPENAI_API_KEY` and network blocked) and no running server. They use `acp_pipeline_snapshot.db` at the repo root when it is there. Without it (and with `CORTICO_DB_PATH` unset), `tests/conftest.py` builds a synthetic stand-in with `tests/fixtures/build_snapshot_fixture.py` into a temp file and points `CORTICO_DB_PATH` at it. The fixture reproduces only the snapshot facts the tests assert on, so a new test that asserts on other real data must add them to the builder.
+- **What tests need:** no network, no API key (they pass with no `ANTHROPIC_API_KEY`, a fake `OPENAI_API_KEY` and network blocked) and no running server. They use `acp_pipeline_snapshot.db` at the repo root when it is there. Without it (and with `CORTICO_DB_PATH` unset), `tests/conftest.py` builds a synthetic stand-in with `tests/fixtures/build_snapshot_fixture.py` into a temp file and points `CORTICO_DB_PATH` at it. The fixture reproduces only the snapshot facts the tests assert on, so a new test that asserts on other real data must add them to the builder.
 - **The tests' prototype database:** `tests/conftest.py` points `PROTOTYPE_DB_PATH` at a temp file before importing the app, using `setdefault`. Never export `PROTOTYPE_DB_PATH` in your shell to the real dev database, because the tests would then write test rows into it.
 - **In a git worktree:** the snapshot, `backend/.venv` and `frontend/node_modules` are gitignored and missing. Symlink the main checkout's `acp_pipeline_snapshot.db` (if you have it; the tests fall back to the fixture otherwise) and `frontend/node_modules` into the worktree, and run the main checkout's `backend/.venv/bin/python`.
 - **To smoke-test the server without touching dev data:** set `PROTOTYPE_DB_PATH=<scratch file>`, because startup runs `create_all` and seeds RQs into whichever database it is pointed at.
@@ -78,9 +78,9 @@ shared state:
 | `db/prototype.db` | The user's real dev data. Never wipe, recreate or bulk-edit it, because it can't be regenerated. |
 | Schema changes | There are no migrations; `PrototypeBase.metadata.create_all` (in `main.py`'s lifespan) only adds missing tables. A new table only needs a name checked against `db/schema.sql`. A new or changed column on an existing table: **stop and ask the user how to migrate**, and give the column, type, default and the tables affected. |
 | Backups in `db/local/` | `exports/` (Markdown memo and transcripts), `exports-<date>/` (earlier exports) and `prototype-<timestamp>.db` (database copies) are the user's backups. Refresh them only when the user asks, and only with `scripts/export_md.py`, because it moves the previous export aside and never overwrites a backup. Never delete or hand-edit them. |
-| Paid OpenAI calls | `POST /voice_memos/{id}/review`, `POST /next_steps/generate`, `POST /research_questions/{rq_id}/code_families/synthesize`, `scripts/backfill_gists.py`. Ask before triggering any of them. Tests never call the model; check a live round trip by hand only with the user's go-ahead. |
+| Paid model calls (Claude) | `POST /voice_memos/{id}/review`, `POST /next_steps/generate`, `POST /research_questions/{rq_id}/code_families/synthesize`, `scripts/backfill_gists.py`. Ask before triggering any of them. Tests never call the model; check a live round trip by hand only with the user's go-ahead. |
 | Backfill scripts on the dev database | The user runs these. Hand off the dry run first as one line, e.g. `cd backend && .venv/bin/python scripts/backfill_evidence_highlights.py --dry-run`, say what output to expect, then give the real run. Try it first against a copy via `PROTOTYPE_DB_PATH`. |
-| `backend/.env` | Holds `OPENAI_API_KEY` and `OPENAI_BASE_URL`. Never print or open it; check by variable name only. The user edits it. |
+| `backend/.env` | Holds `ANTHROPIC_API_KEY` (and the older `OPENAI_API_KEY` and `OPENAI_BASE_URL`). Production reads `ANTHROPIC_API_KEY` from the Vercel env. Never print or open it; check by variable name only. The user edits it. |
 | `backend/.env.local` and Vercel env | `vercel env pull` writes the Neon credentials here. Never print values; use `vercel env ls` for names. `SESSION_SECRET` encrypts every stored Cortico token: rotating it signs everyone out. |
 | Neon Postgres (`DATABASE_URL`) | Real users' sidecar data. Never run tests or ad-hoc writes against it. Schema changes there follow the same rule as below: new tables only, and ask before any column change. |
 | Cortico | Writes go only through `app/cortico/write_back.py`. Never call a Cortico write route by hand, and never delete a Cortico object this app didn't create (`rl_cortico_sync` records which ones it did). Live checks run through `scripts/cortico_smoke.py`, by the user. |
@@ -105,7 +105,7 @@ can break.
 **AI calls** (`services/ai_review.py`, `services/next_steps.py`, `services/code_families.py`, `scripts/backfill_gists.py`)
 - Every id the model returns (snippet, conversation, connection, family, RQ) is checked against the real database before it is saved, because the model can invent ids.
 - The AI only writes `status="suggested"` rows with `ai_metadata` (`model`, `reasoning_effort`, `prompt`, …), because only the user files things, and every AI row must be auditable.
-- Never hard-code a model id or effort in a service, because they come from `config.ai_review` in `backend/config.yaml` (`gpt-5.6-luna`, `low`). The single deliberate pin is `reasoning_effort="low"` in `backfill_gists.py`.
+- Every model call goes through `structured_json` in `app/llm.py`, never a provider SDK directly, because that is where errors become `AIProviderError` and the provider switch lives. Never hard-code a model id or effort in a service, because they come from `config.ai_review` in `backend/config.yaml` (`anthropic`, `claude-opus-5-5`, `low`). The single deliberate pin is `effort="low"` in `backfill_gists.py`.
 - Never re-run the AI when a review is resumed, because it would duplicate suggestions (`ReaderPage.tsx` falls back to `GET /voice_memos/{id}/review`).
 
 **Review and memo** (`routers/review.py`, `routers/memo.py`)
@@ -139,7 +139,7 @@ can break.
 | Before touching | Read |
 |---|---|
 | Models, tables, engines, schema changes | `docs/architecture/databases.md` |
-| Any OpenAI call, prompt, output schema or gist backfill | `docs/architecture/llm.md` |
+| Any model call, prompt, output schema or gist backfill | `docs/architecture/llm.md` |
 | Any endpoint (method, path, owning router) | `docs/architecture/routers.md` |
 | Review, filing, memo, evidence and highlights | `docs/architecture/review-and-memo.md` |
 | Code families, the cap, merges | `docs/architecture/code-families.md` |
@@ -154,7 +154,7 @@ can break.
 - **Error shapes:**
   - Expected errors are `HTTPException` with a `{"detail": ...}` body.
   - `api.ts` throws `Error("<status> <path>: <body>")` for any non-OK response.
-  - **Known gap:** OpenAI failures are not caught, so they surface as a bare 500, and no timeout or retry is set (SDK defaults apply).
+  - Model failures raise `AIProviderError` (`app/llm.py`), answered as `{"detail": ..., "source": "ai"}` with 422, 502 or 503.
 - **Frozen formats:**
   - Words JSON is `[{word, start, end, confidence}]` dicts, never tuples, because it must match Cortico's `snippet.words` and `quoted_texts` indexes `w["word"]`.
   - `conversation_gist` is keyed by Cortico `conversation_id` and is never refreshed.

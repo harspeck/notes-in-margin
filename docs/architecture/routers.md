@@ -2,7 +2,7 @@
 
 All routers live in `backend/app/routers/` and are registered in `backend/app/main.py`.
 `GET /health` lives in `main.py`. CORS allows only `http://localhost:5173`. Routes marked
-**paid** call OpenAI.
+**paid** call Claude (through `app/llm.py`).
 
 | Router | Method and path | Handler |
 |---|---|---|

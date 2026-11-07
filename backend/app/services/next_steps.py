@@ -7,11 +7,11 @@ from __future__ import annotations
 
 import json
 
-from openai import OpenAI
 from sqlalchemy.orm import Session
 
 from ..config import Config
 from ..cortico.source import as_source
+from ..llm import structured_json
 from ..models_prototype import ConversationGist, NextStepSuggestion, ResearchQuestion, RLHighlight, TranscriptState, VoiceMemo
 
 NEXT_STEPS_PROMPT = """You help a sensemaker decide what to listen to next in a large interview \
@@ -158,24 +158,10 @@ def generate_next_step_suggestions(
         "conversation_gists": _gist_context(prototype_db, cortico_db),
     }
 
-    client = OpenAI()
-    response = client.responses.create(
-        model=config.ai_review.model,
-        reasoning={"effort": config.ai_review.reasoning_effort},
-        input=[
-            {"role": "system", "content": NEXT_STEPS_PROMPT},
-            {"role": "user", "content": json.dumps(payload)},
-        ],
-        text={
-            "format": {
-                "type": "json_schema",
-                "name": "next_step_suggestions",
-                "schema": _OUTPUT_SCHEMA,
-                "strict": True,
-            }
-        },
+    answer = structured_json(
+        system=NEXT_STEPS_PROMPT, user=json.dumps(payload), schema=_OUTPUT_SCHEMA, name="next_step_suggestions"
     )
-    result = json.loads(response.output_text)
+    result = answer.data
     raw_suggestions = result.get("suggestions", [])
 
     candidate_conversation_ids = {
@@ -205,8 +191,8 @@ def generate_next_step_suggestions(
             status="suggested",
             ai_metadata=json.dumps(
                 {
-                    "model": config.ai_review.model,
-                    "reasoning_effort": config.ai_review.reasoning_effort,
+                    "model": answer.model,
+                    "reasoning_effort": answer.reasoning_effort,
                     "prompt": NEXT_STEPS_PROMPT,
                 }
             ),

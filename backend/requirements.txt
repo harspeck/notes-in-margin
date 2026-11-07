@@ -7,7 +7,8 @@ pydantic==2.10.4
 pydantic-settings==2.7.0
 python-multipart==0.0.20
 requests==2.34.2
-openai==3.24.0
+anthropic==2.6.0
+openai==3.24.0  # only used when ai_review.provider is "openai"
 python-dotenv==1.0.1
 pyyaml==6.0.2
 httpx==0.28.1
