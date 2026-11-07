@@ -73,6 +73,10 @@ async def create_voice_memo(
     prototype_db: Session = Depends(get_prototype_db),
     user: CurrentUser = Depends(current_user),
 ):
+    if config.data_source == "cortico_api":
+        # Audio lives on local disk and transcription runs faster-whisper locally; the hosted
+        # backend has neither until voice memos move to Blob storage and hosted transcription.
+        raise HTTPException(501, "Voice memos aren't available on the hosted backend yet.")
     if duration > config.voice_memo.max_duration_seconds:
         raise HTTPException(400, f"recording exceeds the {config.voice_memo.max_duration_seconds}s cap")
 

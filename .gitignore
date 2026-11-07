@@ -34,3 +34,7 @@ Backend/.env/
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# Vercel CLI links (never commit; a bare `vercel deploy` can create one at the root)
+.vercel
+vercel.json

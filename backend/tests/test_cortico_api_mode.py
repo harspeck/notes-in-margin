@@ -283,6 +283,13 @@ def test_users_cannot_touch_each_others_highlights(fake):
     assert b.get("/conversations/7001/highlights").json() == []
 
 
+def test_voice_memo_upload_is_a_clear_501_when_hosted(fake):
+    client = _login()
+    r = client.post("/conversations/7001/voice_memos", data={"duration": "5"}, files={"audio": ("a.webm", b"x", "audio/webm")})
+    assert r.status_code == 501
+    assert "hosted backend" in r.json()["detail"]
+
+
 def test_logout_ends_the_session(fake):
     client = _login()
     assert client.post("/auth/logout").json() == {"signed_out": True}

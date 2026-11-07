@@ -46,16 +46,17 @@ Every command below was run and worked on 2026-10-26.
 | Setup (frontend) | `cd frontend && npm install` |
 | Run backend | `cd backend && .venv/bin/uvicorn app.main:app --port 8000` (no `--reload`; `GET /health` → `{"ok":true}`) |
 | Run frontend | `cd frontend && npm run dev`, then open http://localhost:5173 |
-| Test | `cd backend && OPENAI_API_KEY=sk-fake .venv/bin/python -m pytest -q` (92 tests or more, about 1.5 s) |
+| Test | `cd backend && OPENAI_API_KEY=sk-fake .venv/bin/python -m pytest -q` (102 tests, about 1.5 s) |
 | Create sidecar tables | `cd backend && .venv/bin/python scripts/init_db.py --env-file .env.local` (after `vercel env pull`; idempotent) |
 | Live Cortico check | `cd backend && .venv/bin/python scripts/cortico_smoke.py --api <url> --org 353` (the user runs it; it prompts for their Cortico password) |
-| Deploy (preview) | `cd backend && vercel deploy` (project `notes-in-the-margin-api`, team Cortico-Prototypes) |
+| Deploy (preview) | `cd backend && vercel deploy . --project notes-in-the-margin-api --environment preview --yes --scope harrisonspeck-8050s-projects` |
 | Lint | `cd frontend && npm run lint` (oxlint; exits 0 with 10 existing warnings) |
 | Typecheck | `cd frontend && npx tsc -b --noEmit` |
 | Build | `cd frontend && npm run build` |
 | Back up | `cd backend && .venv/bin/python scripts/export_md.py` (Markdown export plus a SQLite copy into `db/local/`; `--no-db-backup`, `--out-dir DIR`) |
 
 - **Ports are fixed locally:** the backend must be on 8000 and the frontend on 5173, because `frontend/src/lib/api.ts` hard-codes `BASE = "http://localhost:8000"` and there is no Vite proxy. CORS comes from `cors_origins` (env `CORS_ORIGINS`, comma-separated) and allows credentials, for the session cookie.
+- **Always deploy with `--project`:** a bare `vercel deploy` sees `frontend/` and `backend/` in the git repo, writes a root `vercel.json` with services, and creates and ships a new project. That happened once (the stray `reflective-listening` project, 2026-11-06).
 - **Tests never use a real database:** `tests/conftest.py` drops `DATABASE_URL`, `POSTGRES_URL`, `DATA_SOURCE` and `SESSION_SECRET` before importing the app. `tests/test_cortico_api_mode.py` runs `cortico_api` mode against an `httpx.MockTransport` fake of Cortico (set `app.auth.TRANSPORT`).
 - **What tests need:** no network, no API key (they pass with a fake `OPENAI_API_KEY` and network blocked) and no running server. They use `acp_pipeline_snapshot.db` at the repo root when it is there. Without it (and with `CORTICO_DB_PATH` unset), `tests/conftest.py` builds a synthetic stand-in with `tests/fixtures/build_snapshot_fixture.py` into a temp file and points `CORTICO_DB_PATH` at it. The fixture reproduces only the snapshot facts the tests assert on, so a new test that asserts on other real data must add them to the builder.
 - **The tests' prototype database:** `tests/conftest.py` points `PROTOTYPE_DB_PATH` at a temp file before importing the app, using `setdefault`. Never export `PROTOTYPE_DB_PATH` in your shell to the real dev database, because the tests would then write test rows into it.
