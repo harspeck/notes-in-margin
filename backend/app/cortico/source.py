@@ -315,9 +315,11 @@ class ApiSource:
         by_id = {r.id: r for r in cached}
         rows = []
         for i, s in enumerate(self.client.transcript(conversation_id)):
-            row = by_id.pop(s["id"], None) or RLCorticoSnippet(id=s["id"], conversation_id=conversation_id)
-            if row not in self.db:
+            row = by_id.pop(s["id"], None) or self.db.get(RLCorticoSnippet, s["id"])
+            if row is None:
+                row = RLCorticoSnippet(id=s["id"], conversation_id=conversation_id)
                 self.db.add(row)
+            row.conversation_id = conversation_id
             row.uuid = s.get("uuid")
             row.order_index = s.get("index_in_conversation") if s.get("index_in_conversation") is not None else i
             row.speaker_name = s.get("speaker_name")
