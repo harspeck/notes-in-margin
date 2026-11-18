@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class HighlightSnippetIn(BaseModel):
@@ -82,6 +82,29 @@ class FileToMemoRequest(BaseModel):
 class MemoEntryUpdate(BaseModel):
     insight_text: str | None = None
     evidence: list[EvidenceIn] | None = None
+    # Sent (even as null) to move the insight; null means "doesn't fit a question yet".
+    research_question_id: int | None = None
+
+
+class HighlightQuestionsUpdate(BaseModel):
+    research_question_ids: list[int]
+
+
+class InsightMergeRequest(BaseModel):
+    target_connection_id: int
+
+
+class MergeNudgeAccept(BaseModel):
+    target_id: int | None = None  # one of the nudge's two ids; default: its default_target_id
+    apply_suggested_wording: bool = False  # questions only: rename the target to the suggestion
+
+
+class FindPassagesRequest(BaseModel):
+    conversation_id: int | None = None
+
+
+class GapListenNextRequest(BaseModel):
+    conversation_ids: list[int] | None = None  # a subset of the gap's; default: all of them
 
 
 class MemoReorderRequest(BaseModel):
@@ -120,3 +143,28 @@ class FocusRequest(BaseModel):
 
 class RQMergeRequest(BaseModel):
     target_id: int
+
+
+REFLECTION_MAX_CHARS = 20000
+LISTENING_INTEREST_MAX_CHARS = 500
+
+
+class TypedReflectionCreate(BaseModel):
+    text: str = Field(min_length=1, max_length=REFLECTION_MAX_CHARS)
+
+
+class ReadingPositionUpdate(BaseModel):
+    position_seconds: float | None = Field(default=None, ge=0)
+    snippet_id: int | None = None
+
+
+class ReviewDraftSave(BaseModel):
+    payload: dict
+
+
+class ListeningInterestCreate(BaseModel):
+    text: str = Field(min_length=1, max_length=LISTENING_INTEREST_MAX_CHARS)
+
+
+class ListeningInterestUpdate(BaseModel):
+    text: str = Field(min_length=1, max_length=LISTENING_INTEREST_MAX_CHARS)

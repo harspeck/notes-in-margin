@@ -10,11 +10,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from openai import OpenAI
 from sqlalchemy.orm import Session
 
 from ..config import CodeFamiliesConfig, Config
 from ..evidence_text import quoted_texts
+from ..llm import structured_json
 from ..models_prototype import (
     CodeFamily,
     CodeFamilyMember,
@@ -22,7 +22,10 @@ from ..models_prototype import (
     CodeFamilyRevision,
     CodeFamilyStar,
     ReflectionConnection,
+    ResearchQuestion,
+    VoiceMemo,
 )
+from . import activity
 from .rq_merges import resolve_rq_id, rq_group_ids
 
 FILED_STATUSES = ("accepted", "edited")
@@ -107,7 +110,10 @@ def group_for(prototype_db: Session, research_question_id: int) -> list[int]:
 def _filed_connections_for_rq(prototype_db: Session, research_question_id: int) -> list[ReflectionConnection]:
     return (
         prototype_db.query(ReflectionConnection)
+        .join(VoiceMemo, VoiceMemo.id == ReflectionConnection.voice_memo_id)
+        .join(ResearchQuestion, ResearchQuestion.id == ReflectionConnection.research_question_id)
         .filter(
+            VoiceMemo.user_id == ResearchQuestion.user_id,  # never another user's insight
             ReflectionConnection.research_question_id.in_(group_for(prototype_db, research_question_id)),
             ReflectionConnection.status.in_(FILED_STATUSES),
         )
@@ -120,7 +126,10 @@ def _valid_connection_ids(prototype_db: Session, research_question_id: int) -> s
     it's trusted — mirrors next_steps._valid_conversation_ids."""
     rows = (
         prototype_db.query(ReflectionConnection.id)
+        .join(VoiceMemo, VoiceMemo.id == ReflectionConnection.voice_memo_id)
+        .join(ResearchQuestion, ResearchQuestion.id == ReflectionConnection.research_question_id)
         .filter(
+            VoiceMemo.user_id == ResearchQuestion.user_id,  # never another user's insight
             ReflectionConnection.research_question_id.in_(group_for(prototype_db, research_question_id)),
             ReflectionConnection.status.in_(FILED_STATUSES),
         )
@@ -411,27 +420,13 @@ def synthesize_code_families(
         "propose_merges": cap.near_cap,
     }
 
-    client = OpenAI()
-    response = client.responses.create(
-        model=config.ai_review.model,
-        reasoning={"effort": config.ai_review.reasoning_effort},
-        input=[
-            {"role": "system", "content": CODE_FAMILY_PROMPT},
-            {"role": "user", "content": json.dumps(payload)},
-        ],
-        text={
-            "format": {
-                "type": "json_schema",
-                "name": "code_families",
-                "schema": _OUTPUT_SCHEMA,
-                "strict": True,
-            }
-        },
+    answer = structured_json(
+        system=CODE_FAMILY_PROMPT, user=json.dumps(payload), schema=_OUTPUT_SCHEMA, name="code_families"
     )
-    result = json.loads(response.output_text)
+    result = answer.data
     ai_metadata = {
-        "model": config.ai_review.model,
-        "reasoning_effort": config.ai_review.reasoning_effort,
+        "model": answer.model,
+        "reasoning_effort": answer.reasoning_effort,
         "prompt": CODE_FAMILY_PROMPT,
         "override_cap": override_cap,
     }
@@ -459,4 +454,12 @@ def synthesize_code_families(
         if cap.near_cap
         else []
     )
+    new_count = sum(1 for f in touched if f.id not in existing_family_ids)
+    activity.log_activity(
+        prototype_db, user_id, "ai", activity.CODE_FAMILIES_SUGGESTED,
+        f"The AI suggested {activity.plural(new_count, 'code family', 'code families')}"
+        + (f" and {activity.plural(len(merges), 'merge')}." if merges else "."),
+        research_question_id=research_question_id, count=new_count, merge_count=len(merges),
+    )
+    prototype_db.commit()
     return SynthesisResult(families=touched, merge_suggestions=merges, withheld_new_families=withheld, cap=cap)

@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.config import get_config  # noqa: E402
+from app.auth import CurrentUser  # noqa: E402
 from app.db import CorticoSession, PrototypeSession  # noqa: E402
 from app.models_cortico import Conversation  # noqa: E402
 from app.models_prototype import VoiceMemo  # noqa: E402
@@ -70,7 +71,7 @@ def write_transcripts(exports: Path, cortico_db: Session, prototype_db: Session)
             f"- **Length:** {mmss(vm.duration)}",
             f"- **Status:** {vm.status}",
             f"- **Transcription engine:** {vm.transcription_engine or 'unknown'}",
-            f"- **Audio:** `{vm.audio_path}`",
+            f"- **Audio:** `{vm.audio_path}`" if vm.audio_path else "- **Audio:** none (typed reflection)",
             "",
             "## Transcript",
             "",
@@ -96,7 +97,7 @@ def _render_entry(e: dict, lines: list[str]) -> None:
 
 def write_memo(exports: Path, cortico_db: Session, prototype_db: Session) -> int:
     exports.mkdir(parents=True, exist_ok=True)
-    memo = get_memo(cortico_db=cortico_db, prototype_db=prototype_db)
+    memo = get_memo(cortico_db=cortico_db, prototype_db=prototype_db, user=CurrentUser(id=get_config().default_user_id))
     lines = ["# Memo", "", "Exported from Notes in the Margin.", ""]
     total = 0
     for sec in memo["sections"]:

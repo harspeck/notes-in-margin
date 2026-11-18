@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from ..auth import CurrentUser, active_workspace, current_user, get_source, workspace_project_ids
 from ..config import get_config
-from ..db import get_cortico_db, get_prototype_db
-from ..guide import guide_questions_in_order, resolve_guide
-from ..models_cortico import Conversation, Participant, Snippet
+from ..cortico.source import CorticoSource
+from ..db import get_prototype_db
 from ..models_prototype import SectionCheckpoint, TranscriptState
 from ..schemas import TranscriptStateUpdate
 
@@ -18,8 +17,17 @@ config = get_config()
 
 
 @router.get("")
-def list_conversations(cortico_db: Session = Depends(get_cortico_db)):
-    conversations = cortico_db.query(Conversation).order_by(Conversation.id).all()
+def list_conversations(
+    source: CorticoSource = Depends(get_source),
+    user: CurrentUser = Depends(current_user),
+    prototype_db: Session = Depends(get_prototype_db),
+):
+    """Snapshot mode with no workspace keeps the full corpus (the prototype's intent). With a
+    workspace, or in cortico_api mode, the list is the workspace's projects."""
+    project_ids = workspace_project_ids(active_workspace(prototype_db, user))
+    if config.data_source == "cortico_api" and not project_ids:
+        raise HTTPException(409, "Choose the projects to work in first (POST /workspaces).")
+    conversations = source.list_conversations(project_ids or None)
     return [
         {
             "id": c.id,
@@ -28,7 +36,9 @@ def list_conversations(cortico_db: Session = Depends(get_cortico_db)):
             "duration_seconds": c.duration_seconds,
             "language": c.language,
             "audio_url": c.audio_url,
-            "has_audio": bool(c.audio_url),
+            "has_audio": c.has_audio,
+            "start_time": c.start_time,
+            "num_participants": c.num_participants,
         }
         for c in conversations
     ]
@@ -37,46 +47,34 @@ def list_conversations(cortico_db: Session = Depends(get_cortico_db)):
 @router.get("/{conversation_id}")
 def get_conversation(
     conversation_id: int,
-    cortico_db: Session = Depends(get_cortico_db),
+    source: CorticoSource = Depends(get_source),
+    user: CurrentUser = Depends(current_user),
     prototype_db: Session = Depends(get_prototype_db),
 ):
-    conversation = cortico_db.get(Conversation, conversation_id)
+    conversation = source.conversation(conversation_id)
     if conversation is None:
         raise HTTPException(404, "conversation not found")
 
-    participants = {
-        p.id: p
-        for p in cortico_db.query(Participant).filter(Participant.conversation_id == conversation_id)
-    }
-    snippets = (
-        cortico_db.query(Snippet)
-        .filter(Snippet.conversation_id == conversation_id)
-        .order_by(Snippet.order_index)
-        .all()
-    )
-    snippet_payload = []
-    for s in snippets:
-        speaker = participants.get(s.participant_id)
-        snippet_payload.append(
-            {
-                "snippet_id": s.id,
-                "order_index": s.order_index,
-                "speaker_name": speaker.name if speaker else None,
-                "is_facilitator": bool(speaker.is_facilitator) if speaker else False,
-                "start_offset": s.start_offset,
-                "end_offset": s.end_offset,
-                "text": s.text,
-                "words": json.loads(s.words) if s.words else [],
-            }
-        )
+    snippet_payload = [
+        {
+            "snippet_id": s.id,
+            "order_index": s.order_index,
+            "speaker_name": s.speaker_name,
+            "is_facilitator": s.is_facilitator,
+            "start_offset": s.start_offset,
+            "end_offset": s.end_offset,
+            "text": s.text,
+            "words": s.words,
+        }
+        for s in source.snippets(conversation_id)
+    ]
 
-    guide = resolve_guide(cortico_db, conversation)
-    guide_questions = guide_questions_in_order(cortico_db, guide) if guide else []
+    guide_questions = source.guide_questions(conversation)
 
     checkpoints = (
         prototype_db.query(SectionCheckpoint)
         .filter(
-            SectionCheckpoint.user_id == config.default_user_id,
+            SectionCheckpoint.user_id == user.id,
             SectionCheckpoint.conversation_id == conversation_id,
         )
         .all()
@@ -96,13 +94,14 @@ def get_conversation(
         for q in guide_questions
     ]
 
-    state = prototype_db.get(TranscriptState, (config.default_user_id, conversation_id))
+    state = prototype_db.get(TranscriptState, (user.id, conversation_id))
 
     return {
         "id": conversation.id,
         "title": conversation.title,
+        "project_id": conversation.project_id,
         "audio_url": conversation.audio_url,
-        "has_audio": bool(conversation.audio_url),
+        "has_audio": conversation.has_audio,
         "duration_seconds": conversation.duration_seconds,
         "language": conversation.language,
         "snippets": snippet_payload,
@@ -120,11 +119,12 @@ def get_conversation(
 def update_transcript_state(
     conversation_id: int,
     body: TranscriptStateUpdate,
+    user: CurrentUser = Depends(current_user),
     prototype_db: Session = Depends(get_prototype_db),
 ):
-    state = prototype_db.get(TranscriptState, (config.default_user_id, conversation_id))
+    state = prototype_db.get(TranscriptState, (user.id, conversation_id))
     if state is None:
-        state = TranscriptState(user_id=config.default_user_id, conversation_id=conversation_id)
+        state = TranscriptState(user_id=user.id, conversation_id=conversation_id)
         prototype_db.add(state)
 
     now = datetime.now(timezone.utc)

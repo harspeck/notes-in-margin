@@ -9,12 +9,14 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BACKEND_DIR / ".env")  # OPENAI_API_KEY lives here, never committed
+load_dotenv(BACKEND_DIR / ".env")  # ANTHROPIC_API_KEY (and OPENAI_API_KEY) live here, never committed
 
 
 class AIReviewConfig(BaseModel):
+    provider: str = "anthropic"  # "anthropic" or "openai"; see app/llm.py
     model: str
     reasoning_effort: str
+    max_output_tokens: int = 32000
 
 
 class TranscriptionConfig(BaseModel):
@@ -33,7 +35,69 @@ class CodeFamiliesConfig(BaseModel):
     max_new_per_run: int
 
 
+class MergeNudgesConfig(BaseModel):
+    max_question_pairs_per_run: int = 2
+    max_insight_pairs_per_run: int = 3
+
+
+class FindPassagesConfig(BaseModel):
+    max_conversations_per_run: int = 3  # one model call per conversation
+    max_passages_per_conversation: int = 5
+    max_insights_in_prompt: int = 8
+
+
+class WhatsMissingConfig(BaseModel):
+    max_observations: int = 3
+    max_unopened_conversations: int = 150  # how many unopened conversations the model is shown
+
+
+class ListeningSuggestionsConfig(BaseModel):
+    model: str = "claude-haiku-5-5"
+    reasoning_effort: str = "low"
+    max_suggestions: int = 3
+    recent_highlights: int = 15  # how many of the user's newest highlights the model is shown
+    min_minutes_between_runs: int = 10
+
+
+class GistsConfig(BaseModel):
+    model: str = "claude-haiku-5-5"
+    reasoning_effort: str = "low"
+    max_per_request: int = 5  # conversations summarised by one POST /gists/generate
+    sample_snippets: int = 20
+
+
+class NextStepsConfig(BaseModel):
+    min_minutes_between_auto_runs: int = 30  # POST /next_steps/recommend never calls the model sooner
+
+
+class CorticoWriteBackConfig(BaseModel):
+    highlights: bool = True
+
+
+class CorticoConfig(BaseModel):
+    base_url: str = "https://api2.cortico.ai"
+    timeout_seconds: float = 20.0
+    max_retries: int = 2  # extra attempts on 429 / 5xx / network errors
+    snippet_cache_ttl_seconds: int = 3600
+    tool_id: str = "notes-in-the-margin"
+    write_back: CorticoWriteBackConfig = CorticoWriteBackConfig()
+
+
+class SessionConfig(BaseModel):
+    cookie_name: str = "nim_session"
+    max_age_days: int = 7
+    cookie_samesite: str = "lax"
+
+
 class Config(BaseModel):
+    # "snapshot" reads the local read-only Cortico copy as one implicit user (local dev and
+    # tests). "cortico_api" signs users in with Cortico and reads the v2 API with their token.
+    data_source: str = "snapshot"
+    database_url: str | None = None  # sidecar database; None means the SQLite file below
+    session_secret: str | None = None
+    cors_origins: list[str] = ["http://localhost:5173"]
+    cortico: CorticoConfig = CorticoConfig()
+    session: SessionConfig = SessionConfig()
     default_user_id: int
     default_project_id: int
     cortico_db_path: str
@@ -43,6 +107,12 @@ class Config(BaseModel):
     transcription: TranscriptionConfig
     voice_memo: VoiceMemoConfig
     code_families: CodeFamiliesConfig
+    merge_nudges: MergeNudgesConfig = MergeNudgesConfig()
+    find_passages: FindPassagesConfig = FindPassagesConfig()
+    whats_missing: WhatsMissingConfig = WhatsMissingConfig()
+    listening_suggestions: ListeningSuggestionsConfig = ListeningSuggestionsConfig()
+    gists: GistsConfig = GistsConfig()
+    next_steps: NextStepsConfig = NextStepsConfig()
 
     @property
     def project_root(self) -> Path:
@@ -74,4 +144,26 @@ def get_config() -> Config:
     override = os.environ.get("PROTOTYPE_DB_PATH")
     if override:
         raw["prototype_db_path"] = override
+    snapshot_override = os.environ.get("CORTICO_DB_PATH")
+    if snapshot_override:
+        raw["cortico_db_path"] = snapshot_override
+    if os.environ.get("DATA_SOURCE"):
+        raw["data_source"] = os.environ["DATA_SOURCE"]
+    # Vercel's Neon integration exposes DATABASE_URL (pooled) and POSTGRES_URL.
+    database_url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
+    if database_url:
+        raw["database_url"] = database_url
+    if os.environ.get("SESSION_SECRET"):
+        raw["session_secret"] = os.environ["SESSION_SECRET"]
+    if os.environ.get("CORS_ORIGINS"):
+        raw["cors_origins"] = [o.strip() for o in os.environ["CORS_ORIGINS"].split(",") if o.strip()]
+    if os.environ.get("CORTICO_BASE_URL"):
+        raw.setdefault("cortico", {})["base_url"] = os.environ["CORTICO_BASE_URL"]
+    if os.environ.get("SESSION_COOKIE_SAMESITE"):
+        raw.setdefault("session", {})["cookie_samesite"] = os.environ["SESSION_COOKIE_SAMESITE"]
+    for env, key in (("AI_PROVIDER", "provider"), ("AI_MODEL", "model"), ("AI_REASONING_EFFORT", "reasoning_effort")):
+        if os.environ.get(env):
+            raw.setdefault("ai_review", {})[key] = os.environ[env]
+    if raw.get("data_source") not in ("snapshot", "cortico_api"):
+        raise ValueError(f"data_source must be 'snapshot' or 'cortico_api', got {raw.get('data_source')!r}")
     return Config.model_validate(raw)

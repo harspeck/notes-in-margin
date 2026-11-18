@@ -5,15 +5,12 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from ..auth import CurrentUser, current_user, get_source
 from ..config import get_config
-from ..db import get_cortico_db, get_prototype_db
-from ..models_prototype import (
-    CodeFamily,
-    CodeFamilyMember,
-    CodeFamilyMergeSuggestion,
-    ReflectionConnection,
-    ResearchQuestion,
-)
+from ..cortico.source import CorticoSource
+from ..db import get_prototype_db
+from ..models_prototype import CodeFamily, CodeFamilyMember, CodeFamilyMergeSuggestion, ReflectionConnection
+from ..ownership import owned_family, owned_merge_suggestion, owned_rq
 from ..schemas import (
     CodeFamilyCreate,
     CodeFamilyMembersUpdate,
@@ -21,6 +18,7 @@ from ..schemas import (
     CodeFamilyUpdate,
     StarRequest,
 )
+from ..services import activity
 from ..services.code_families import (
     LIVE_FAMILY_STATUSES,
     _merge_target,
@@ -151,13 +149,6 @@ def _list_for_rq(prototype_db: Session, rq_id: int, include_dismissed: bool) -> 
     return serialize_families(prototype_db, query.order_by(CodeFamily.created_at, CodeFamily.id).all())
 
 
-def _get_family(prototype_db: Session, family_id: int) -> CodeFamily:
-    family = prototype_db.get(CodeFamily, family_id)
-    if family is None:
-        raise HTTPException(404, "code family not found")
-    return family
-
-
 def _checked_connection_ids(prototype_db: Session, rq_id: int, connection_ids: list[int]) -> list[int]:
     """De-duplicated ids, each a filed entry in rq_id's merged group, else 422."""
     ids = list(dict.fromkeys(connection_ids))
@@ -176,14 +167,19 @@ def _require_text(value: str, field: str) -> str:
 
 @router.get("/research_questions/{rq_id}/code_families")
 def list_code_families(
-    rq_id: int, include_dismissed: bool = False, prototype_db: Session = Depends(get_prototype_db)
+    rq_id: int, include_dismissed: bool = False, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
+    owned_rq(prototype_db, rq_id, user)
     return _list_for_rq(prototype_db, rq_id, include_dismissed)
 
 
 @router.get("/research_questions/{rq_id}/code_families/state")
-def code_family_state(rq_id: int, prototype_db: Session = Depends(get_prototype_db)):
+def code_family_state(
+    rq_id: int, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)
+):
     """Families plus pending merge suggestions and where the RQ stands against its cap."""
+    owned_rq(prototype_db, rq_id, user)
     return _state_for_rq(prototype_db, rq_id)
 
 
@@ -191,17 +187,16 @@ def code_family_state(rq_id: int, prototype_db: Session = Depends(get_prototype_
 def synthesize(
     rq_id: int,
     override_cap: bool = False,
-    cortico_db: Session = Depends(get_cortico_db),
+    cortico_db: CorticoSource = Depends(get_source),
     prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
-    rq = prototype_db.get(ResearchQuestion, rq_id)
-    if rq is None:
-        raise HTTPException(404, "research question not found")
+    owned_rq(prototype_db, rq_id, user)
     result = synthesize_code_families(
         prototype_db=prototype_db,
         cortico_db=cortico_db,
         config=config,
-        user_id=config.default_user_id,
+        user_id=user.id,
         research_question_id=rq_id,
         override_cap=override_cap,
     )
@@ -209,8 +204,11 @@ def synthesize(
 
 
 @router.patch("/code_families/{family_id}")
-def update_family(family_id: int, body: CodeFamilyUpdate, prototype_db: Session = Depends(get_prototype_db)):
-    family = _get_family(prototype_db, family_id)
+def update_family(
+    family_id: int, body: CodeFamilyUpdate, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
+):
+    family = owned_family(prototype_db, family_id, user)
     if body.name is not None or body.definition is not None:
         write_revision(prototype_db, family)
     if body.name is not None:
@@ -223,18 +221,17 @@ def update_family(family_id: int, body: CodeFamilyUpdate, prototype_db: Session 
 
 
 @router.post("/research_questions/{rq_id}/code_families")
-def create_family(rq_id: int, body: CodeFamilyCreate, prototype_db: Session = Depends(get_prototype_db)):
+def create_family(rq_id: int, body: CodeFamilyCreate, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)):
     """A user-made family: accepted, no ai_metadata, and not blocked by the cap (the
     returned cap lets the UI warn)."""
-    if prototype_db.get(ResearchQuestion, rq_id) is None:
-        raise HTTPException(404, "research question not found")
+    owned_rq(prototype_db, rq_id, user)
     name = _require_text(body.name, "name")
     definition = _require_text(body.definition, "definition")
     connection_ids = _checked_connection_ids(prototype_db, rq_id, body.connection_ids)
     target_rq_id = resolve_rq_id(prototype_db, rq_id)
 
     family = CodeFamily(
-        user_id=config.default_user_id,
+        user_id=user.id,
         research_question_id=target_rq_id,
         name=name,
         definition=definition,
@@ -253,9 +250,10 @@ def create_family(rq_id: int, body: CodeFamilyCreate, prototype_db: Session = De
 
 @router.put("/code_families/{family_id}/members")
 def replace_members(
-    family_id: int, body: CodeFamilyMembersUpdate, prototype_db: Session = Depends(get_prototype_db)
+    family_id: int, body: CodeFamilyMembersUpdate, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
-    family = _get_family(prototype_db, family_id)
+    family = owned_family(prototype_db, family_id, user)
     if family.status not in LIVE_FAMILY_STATUSES:
         raise HTTPException(409, f"code family is {family.status}")
     connection_ids = _checked_connection_ids(prototype_db, family.research_question_id, body.connection_ids)
@@ -275,10 +273,19 @@ def replace_members(
 
 
 @router.post("/code_families/{family_id}/star")
-def star_family(family_id: int, body: StarRequest, prototype_db: Session = Depends(get_prototype_db)):
-    family = _get_family(prototype_db, family_id)
+def star_family(
+    family_id: int, body: StarRequest, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
+):
+    family = owned_family(prototype_db, family_id, user)
     if body.starred and family.status not in LIVE_FAMILY_STATUSES:
         raise HTTPException(409, f"code family is {family.status}")
+    if body.starred and family.id not in starred_family_ids(prototype_db, [family.id]):
+        activity.log_activity(
+            prototype_db, user.id, "user", activity.CODE_FAMILY_STARRED,
+            f"You starred a code family: \u201c{activity.excerpt(family.name)}\u201d",
+            code_family_id=family.id, research_question_id=family.research_question_id,
+        )
     set_star(prototype_db, family, body.starred)
     prototype_db.commit()
     prototype_db.refresh(family)
@@ -286,13 +293,16 @@ def star_family(family_id: int, body: StarRequest, prototype_db: Session = Depen
 
 
 @router.post("/code_families/merge")
-def merge_user_families(body: CodeFamilyMergeRequest, prototype_db: Session = Depends(get_prototype_db)):
+def merge_user_families(
+    body: CodeFamilyMergeRequest, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
+):
     family_ids = list(dict.fromkeys(body.family_ids))
     if len(family_ids) < 2:
         raise HTTPException(422, "pick at least two code families to merge")
     name = _require_text(body.name, "name")
     definition = _require_text(body.definition, "definition")
-    families = [_get_family(prototype_db, fid) for fid in family_ids]
+    families = [owned_family(prototype_db, fid, user) for fid in family_ids]
     stale = [f.id for f in families if f.status not in LIVE_FAMILY_STATUSES]
     if stale:
         raise HTTPException(409, f"code families no longer active: {stale}")
@@ -315,30 +325,44 @@ def merge_user_families(body: CodeFamilyMergeRequest, prototype_db: Session = De
 
 
 @router.post("/code_families/{family_id}/accept")
-def accept_family(family_id: int, prototype_db: Session = Depends(get_prototype_db)):
-    family = prototype_db.get(CodeFamily, family_id)
-    if family is None:
-        raise HTTPException(404, "code family not found")
+def accept_family(
+    family_id: int, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)
+):
+    family = owned_family(prototype_db, family_id, user)
+    if family.status not in LIVE_FAMILY_STATUSES:
+        raise HTTPException(409, f"this code family is {family.status} and can't be accepted")
+    if family.status != "accepted":
+        activity.log_activity(
+            prototype_db, user.id, "user", activity.CODE_FAMILY_ACCEPTED,
+            f"You accepted a code family: \u201c{activity.excerpt(family.name)}\u201d",
+            code_family_id=family.id, research_question_id=family.research_question_id,
+        )
     family.status = "accepted"
     prototype_db.commit()
     return {"id": family.id, "status": family.status}
 
 
 @router.post("/code_families/{family_id}/dismiss")
-def dismiss_family(family_id: int, prototype_db: Session = Depends(get_prototype_db)):
-    family = prototype_db.get(CodeFamily, family_id)
-    if family is None:
-        raise HTTPException(404, "code family not found")
+def dismiss_family(
+    family_id: int, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)
+):
+    family = owned_family(prototype_db, family_id, user)
+    if family.status != "dismissed":
+        activity.log_activity(
+            prototype_db, user.id, "user", activity.CODE_FAMILY_DISMISSED,
+            f"You dismissed a code family: \u201c{activity.excerpt(family.name)}\u201d",
+            code_family_id=family.id, research_question_id=family.research_question_id,
+        )
     family.status = "dismissed"
     prototype_db.commit()
     return {"id": family.id, "status": family.status}
 
 
 @router.post("/code_family_merges/{merge_id}/accept")
-def accept_merge_suggestion(merge_id: int, prototype_db: Session = Depends(get_prototype_db)):
-    suggestion = prototype_db.get(CodeFamilyMergeSuggestion, merge_id)
-    if suggestion is None:
-        raise HTTPException(404, "merge suggestion not found")
+def accept_merge_suggestion(
+    merge_id: int, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)
+):
+    suggestion = owned_merge_suggestion(prototype_db, merge_id, user)
     if suggestion.status != "suggested":
         raise HTTPException(409, f"merge suggestion is already {suggestion.status}")
     try:
@@ -349,10 +373,10 @@ def accept_merge_suggestion(merge_id: int, prototype_db: Session = Depends(get_p
 
 
 @router.post("/code_family_merges/{merge_id}/dismiss")
-def dismiss_merge_suggestion(merge_id: int, prototype_db: Session = Depends(get_prototype_db)):
-    suggestion = prototype_db.get(CodeFamilyMergeSuggestion, merge_id)
-    if suggestion is None:
-        raise HTTPException(404, "merge suggestion not found")
+def dismiss_merge_suggestion(
+    merge_id: int, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)
+):
+    suggestion = owned_merge_suggestion(prototype_db, merge_id, user)
     suggestion.status = "dismissed"
     prototype_db.commit()
     return {"id": suggestion.id, "status": suggestion.status}

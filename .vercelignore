@@ -1,0 +1,22 @@
+# Upload only the two services and the config. Everything else at the root stays local:
+# the snapshot, db/, docs/ and mocks/ hold data that must never leave this machine.
+/*
+!/vercel.json
+!/frontend
+!/backend
+
+frontend/node_modules
+frontend/dist
+backend/.venv
+backend/tests
+backend/.pytest_cache
+backend/.cache
+**/__pycache__
+*.pyc
+*.db
+*.webm
+*.wav
+.env*
+**/.env*
+**/.vercel
+.DS_Store

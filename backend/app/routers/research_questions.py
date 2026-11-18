@@ -3,9 +3,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from ..auth import CurrentUser, active_workspace, current_user, get_source, workspace_project_ids
 from ..config import get_config
+from ..cortico.source import CorticoSource
 from ..db import get_prototype_db
 from ..models_prototype import ResearchQuestion, RQFocus, RQMerge
+from ..ownership import owned_rq, owned_rq_merge, owns_rq
 from ..schemas import (
     FocusRequest,
     ReorderRequest,
@@ -13,6 +16,7 @@ from ..schemas import (
     ResearchQuestionUpdate,
     RQMergeRequest,
 )
+from ..services import activity, questions
 from ..services.rq_merges import active_merge_edges, merge_rq, resolve_rq_id, rq_group_ids, undo_merge
 
 router = APIRouter(prefix="/research_questions", tags=["research_questions"])
@@ -74,19 +78,13 @@ def _serialize_merge(m: RQMerge) -> dict:
     }
 
 
-def _get_rq(prototype_db: Session, rq_id: int) -> ResearchQuestion:
-    rq = prototype_db.get(ResearchQuestion, rq_id)
-    if rq is None:
-        raise HTTPException(404, "research question not found")
-    return rq
-
-
 @router.get("")
 def list_research_questions(
-    include_archived: bool = False, prototype_db: Session = Depends(get_prototype_db)
+    include_archived: bool = False, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
     query = prototype_db.query(ResearchQuestion).filter(
-        ResearchQuestion.user_id == config.default_user_id
+        ResearchQuestion.user_id == user.id
     )
     if not include_archived:
         query = query.filter(ResearchQuestion.archived.is_(False))
@@ -94,23 +92,67 @@ def list_research_questions(
     return serialize_rqs(prototype_db, rqs)
 
 
+@router.get("/breadth")
+def get_breadth(
+    source: CorticoSource = Depends(get_source), prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
+):
+    """How widely each active question has come up among the conversations the user has
+    opened. See docs/architecture/routers.md for the shape."""
+    project_ids = workspace_project_ids(active_workspace(prototype_db, user))
+    return questions.breadth(prototype_db, source, user.id, project_ids)
+
+
+@router.get("/guide_ideas")
+def get_guide_ideas(
+    source: CorticoSource = Depends(get_source), prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
+):
+    """Conversation-guide questions the user could adopt as research questions."""
+    project_ids = workspace_project_ids(active_workspace(prototype_db, user))
+    return questions.guide_ideas(prototype_db, source, user.id, project_ids)
+
+
+@router.get("/{rq_id}/highlights")
+def list_question_highlights(
+    rq_id: int, source: CorticoSource = Depends(get_source), prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
+):
+    """Highlights filed under this question's merged group that no filed insight cites
+    ("highlights filed here, no insight yet")."""
+    owned_rq(prototype_db, rq_id, user)
+    highlights = questions.uncited_highlights(prototype_db, source, user.id, rq_id)
+    return {
+        "research_question_id": resolve_rq_id(prototype_db, rq_id),
+        "highlights": questions.serialize_question_highlights(prototype_db, source, highlights),
+    }
+
+
 @router.post("")
 def create_research_question(
-    body: ResearchQuestionCreate, prototype_db: Session = Depends(get_prototype_db)
+    body: ResearchQuestionCreate, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
     max_order = (
         prototype_db.query(ResearchQuestion)
-        .filter(ResearchQuestion.user_id == config.default_user_id)
+        .filter(ResearchQuestion.user_id == user.id)
         .count()
     )
+    workspace_projects = workspace_project_ids(active_workspace(prototype_db, user))
     rq = ResearchQuestion(
-        user_id=config.default_user_id,
-        project_id=config.default_project_id,
+        user_id=user.id,
+        # A research question spans the workspace; project_id records where it started.
+        project_id=workspace_projects[0] if workspace_projects else config.default_project_id,
         name=body.name,
         description=body.description,
         display_order=max_order,
     )
     prototype_db.add(rq)
+    prototype_db.flush()
+    activity.log_activity(
+        prototype_db, user.id, "user", activity.RQ_CREATED,
+        f"You added a research question: \u201c{activity.excerpt(rq.name)}\u201d", research_question_id=rq.id,
+    )
     prototype_db.commit()
     prototype_db.refresh(rq)
     return _serialize(prototype_db, rq)
@@ -118,11 +160,11 @@ def create_research_question(
 
 @router.patch("/{rq_id}")
 def update_research_question(
-    rq_id: int, body: ResearchQuestionUpdate, prototype_db: Session = Depends(get_prototype_db)
+    rq_id: int, body: ResearchQuestionUpdate, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
-    rq = prototype_db.get(ResearchQuestion, rq_id)
-    if rq is None:
-        raise HTTPException(404, "research question not found")
+    rq = owned_rq(prototype_db, rq_id, user)
+    before = (rq.name, rq.description, rq.archived)
     if body.name is not None:
         rq.name = body.name
     if body.description is not None:
@@ -131,6 +173,18 @@ def update_research_question(
         if not body.archived and rq.id in active_merge_edges(prototype_db):
             raise HTTPException(409, "this research question is merged into another; undo the merge instead")
         rq.archived = body.archived
+    if (rq.name, rq.description) != before[:2]:
+        activity.log_activity(
+            prototype_db, user.id, "user", activity.RQ_REWORDED,
+            f"You reworded a research question: \u201c{activity.excerpt(rq.name)}\u201d",
+            research_question_id=rq.id, previous_name=before[0] if rq.name != before[0] else None,
+        )
+    if rq.archived != before[2]:
+        activity.log_activity(
+            prototype_db, user.id, "user", activity.RQ_ARCHIVED if rq.archived else activity.RQ_RESTORED,
+            f"You {'archived' if rq.archived else 'restored'} a research question: \u201c{activity.excerpt(rq.name)}\u201d",
+            research_question_id=rq.id,
+        )
     prototype_db.commit()
     prototype_db.refresh(rq)
     return _serialize(prototype_db, rq)
@@ -138,24 +192,24 @@ def update_research_question(
 
 @router.put("/reorder")
 def reorder_research_questions(
-    body: ReorderRequest, prototype_db: Session = Depends(get_prototype_db)
+    body: ReorderRequest, prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
 ):
     for order, rq_id in enumerate(body.ordered_ids):
-        rq = prototype_db.get(ResearchQuestion, rq_id)
-        if rq is not None:
-            rq.display_order = order
+        if owns_rq(prototype_db, rq_id, user):
+            prototype_db.get(ResearchQuestion, rq_id).display_order = order
     prototype_db.commit()
     return {"reordered": True}
 
 
 @router.post("/{rq_id}/focus")
-def set_focus(rq_id: int, body: FocusRequest, prototype_db: Session = Depends(get_prototype_db)):
-    rq = _get_rq(prototype_db, rq_id)
+def set_focus(rq_id: int, body: FocusRequest, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)):
+    rq = owned_rq(prototype_db, rq_id, user)
     if rq.id in active_merge_edges(prototype_db):
         raise HTTPException(409, "this research question is merged into another; focus its target instead")
     focus = prototype_db.get(RQFocus, rq.id)
     if focus is None:
-        focus = RQFocus(research_question_id=rq.id, user_id=config.default_user_id)
+        focus = RQFocus(research_question_id=rq.id, user_id=user.id)
         prototype_db.add(focus)
     focus.focused = body.focused
     prototype_db.commit()
@@ -163,11 +217,11 @@ def set_focus(rq_id: int, body: FocusRequest, prototype_db: Session = Depends(ge
 
 
 @router.post("/{rq_id}/merge_into")
-def merge_into(rq_id: int, body: RQMergeRequest, prototype_db: Session = Depends(get_prototype_db)):
-    source = _get_rq(prototype_db, rq_id)
-    target = _get_rq(prototype_db, body.target_id)
+def merge_into(rq_id: int, body: RQMergeRequest, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)):
+    source = owned_rq(prototype_db, rq_id, user)
+    target = owned_rq(prototype_db, body.target_id, user)
     try:
-        merge = merge_rq(prototype_db, user_id=config.default_user_id, source=source, target=target)
+        merge = merge_rq(prototype_db, user_id=user.id, source=source, target=target)
     except ValueError as e:
         raise HTTPException(409, str(e))
     prototype_db.refresh(source)
@@ -180,10 +234,10 @@ def merge_into(rq_id: int, body: RQMergeRequest, prototype_db: Session = Depends
 
 
 @rq_merges_router.post("/{merge_id}/undo")
-def undo(merge_id: int, prototype_db: Session = Depends(get_prototype_db)):
-    merge = prototype_db.get(RQMerge, merge_id)
-    if merge is None:
-        raise HTTPException(404, "research question merge not found")
+def undo(
+    merge_id: int, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)
+):
+    merge = owned_rq_merge(prototype_db, merge_id, user)
     try:
         kept = undo_merge(prototype_db, merge)
     except ValueError as e:

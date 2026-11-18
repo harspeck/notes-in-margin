@@ -5,7 +5,9 @@ docs/prototype-log.md) rather than in automated tests."""
 import json
 
 from fastapi.testclient import TestClient
+import pytest
 
+from app.auth import CurrentUser, current_user
 from app.db import CorticoSession, PrototypeSession
 from app.main import app
 from app.models_prototype import NextStepSuggestion, RLHighlight, VoiceMemo
@@ -77,7 +79,15 @@ def test_engaged_conversation_ids_covers_highlights_and_voice_memos():
         db.close()
 
 
-def test_accept_and_dismiss_persist_and_are_reflected_on_reload():
+@pytest.fixture
+def act_as_90003():
+    """Accept and dismiss only serve the suggestion's owner."""
+    app.dependency_overrides[current_user] = lambda: CurrentUser(id=90003)
+    yield
+    app.dependency_overrides.pop(current_user, None)
+
+
+def test_accept_and_dismiss_persist_and_are_reflected_on_reload(act_as_90003):
     db = PrototypeSession()
     try:
         suggestion = NextStepSuggestion(

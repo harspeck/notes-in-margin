@@ -288,3 +288,345 @@ class AppSetting(PrototypeBase):
     key = Column(String, primary_key=True)
     value = Column(Text, nullable=False)
     updated_at = Column(DateTime, nullable=False, default=_now, onupdate=_now)
+
+
+# --- Cortico v2 integration (cortico_api mode). New tables only, so create_all picks them
+# up on an existing database without a migration. All carry the rl_ prefix (db/schema.sql).
+
+
+class RLSession(PrototypeBase):
+    """A signed-in browser session. The cookie holds a random token; only its sha256 is
+    stored. Cortico tokens are encrypted with SESSION_SECRET. Refresh tokens rotate on every
+    use, so refresh runs under a row lock (see app/auth.py)."""
+
+    __tablename__ = "rl_session"
+    token_hash = Column(String(64), primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)  # Cortico user id from /v2/me
+    email = Column(String)
+    display_name = Column(String)
+    access_token_enc = Column(Text, nullable=False)
+    refresh_token_enc = Column(Text, nullable=False)
+    access_expires_at = Column(DateTime(timezone=True), nullable=False)
+    active_workspace_id = Column(Integer)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    last_seen_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+class RLWorkspace(PrototypeBase):
+    """A user-named bundle of Cortico projects in one organization. The integer id is the
+    handle other apps (llm-auto-highlighter stores single-int workspace keys) can adopt."""
+
+    __tablename__ = "rl_workspace"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    organization_id = Column(Integer, nullable=False)
+    name = Column(String, nullable=False)
+    project_ids_json = Column(Text, nullable=False)  # JSON list[int] of Cortico project ids
+    data_source = Column(String, nullable=False)  # ids only make sense within one source
+    archived = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+
+
+class RLCorticoConversation(PrototypeBase):
+    """Read-through cache of v2 conversation metadata. v2 conversations carry forum_id but
+    not project_id, so the project comes from the /v2/conversations?project_id= listing."""
+
+    __tablename__ = "rl_cortico_conversation"
+    id = Column(Integer, primary_key=True, autoincrement=False)  # Cortico conversation id
+    project_id = Column(Integer, index=True)
+    forum_id = Column(Integer)
+    title = Column(String)
+    duration_seconds = Column(Float)
+    start_time = Column(String)
+    has_audio = Column(Boolean, nullable=False, default=False)
+    num_participants = Column(Integer)
+    fetched_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+class RLCorticoSnippet(PrototypeBase):
+    """Read-through cache of v2 transcript snippets. Evidence rows store only
+    (snippet_id, start, end), so quoting them later needs the words without a conversation
+    id in hand. The uuid is what POST /v2/highlights needs."""
+
+    __tablename__ = "rl_cortico_snippet"
+    id = Column(Integer, primary_key=True, autoincrement=False)  # Cortico snippet id
+    uuid = Column(String)
+    conversation_id = Column(Integer, nullable=False, index=True)
+    order_index = Column(Integer, nullable=False)
+    speaker_name = Column(String)
+    is_facilitator = Column(Boolean, nullable=False, default=False)
+    start_offset = Column(Float)
+    end_offset = Column(Float)
+    text = Column(Text, nullable=False, default="")
+    words_json = Column(Text, nullable=False, default="[]")
+    fetched_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+class RLCorticoSync(PrototypeBase):
+    """One row per local object mirrored to Cortico (today: highlights). The local write
+    always succeeds first; this row records whether the Cortico copy exists, so a failed
+    push can be retried without creating duplicates."""
+
+    __tablename__ = "rl_cortico_sync"
+    id = Column(Integer, primary_key=True)
+    local_kind = Column(String, nullable=False)  # "highlight"
+    local_id = Column(Integer, nullable=False)
+    cortico_kind = Column(String, nullable=False)  # "highlight"
+    cortico_id = Column(Integer)
+    status = Column(String, nullable=False, default="pending")  # pending|synced|failed|skipped|deleted
+    error = Column(Text)
+    attempts = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+
+    __table_args__ = (UniqueConstraint("local_kind", "local_id", name="uq_rl_cortico_sync_local"),)
+
+
+# --- Server-side state for the hosted app (2026-11-18). New tables only.
+
+
+class ReadingState(PrototypeBase):
+    """That a user opened a conversation, and how far they got. One row per pair."""
+
+    __tablename__ = "rl_reading_state"
+    user_id = Column(Integer, nullable=False)
+    conversation_id = Column(Integer, nullable=False)
+    first_opened_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    last_opened_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    position_seconds = Column(Float)
+    position_snippet_id = Column(Integer)
+
+    __table_args__ = (PrimaryKeyConstraint("user_id", "conversation_id"),)
+
+
+class ReviewDraft(PrototypeBase):
+    """The client's unsaved review decisions for one voice memo. The payload is opaque to
+    the server. Filing the memo deletes the row."""
+
+    __tablename__ = "rl_review_draft"
+    voice_memo_id = Column(Integer, ForeignKey("voice_memo.id"), primary_key=True, autoincrement=False)
+    user_id = Column(Integer, nullable=False)
+    payload_json = Column(Text, nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+
+
+class ListeningInterest(PrototypeBase):
+    """One "what I want to hear next" line. Lines the AI review extracted from a reflection
+    have origin "reflection" and its voice memo id; lines the user typed have origin "user".
+    Removing sets the status; rows are never deleted."""
+
+    __tablename__ = "rl_listening_interest"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    text = Column(Text, nullable=False)
+    origin = Column(String, nullable=False)  # reflection | user | suggestion
+    voice_memo_id = Column(Integer, ForeignKey("voice_memo.id"), nullable=True)
+    status = Column(String, nullable=False, default="active")  # active -> removed
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+
+
+class ListeningSuggestion(PrototypeBase):
+    """A "what I want to hear next" line the AI offered. Accepting it adds a
+    `rl_listening_interest` row; dismissing keeps the row, so the line is not offered again."""
+
+    __tablename__ = "rl_listening_suggestion"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    run_id = Column(Integer, ForeignKey("rl_listening_suggestion_run.id"), nullable=False)
+    text = Column(Text, nullable=False)
+    reason = Column(Text)
+    status = Column(String, nullable=False, default="suggested")  # suggested -> accepted | dismissed
+    listening_interest_id = Column(Integer, ForeignKey("rl_listening_interest.id"), nullable=True)
+    ai_metadata = Column(Text)  # JSON: {model, reasoning_effort, prompt}
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+
+
+class ListeningSuggestionRun(PrototypeBase):
+    """One model call for listening suggestions. `fingerprint` is the cache key: the
+    questions and highlights the model was shown. A run that offered nothing still gets a
+    row, so the same inputs are not sent twice."""
+
+    __tablename__ = "rl_listening_suggestion_run"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    fingerprint = Column(String, nullable=False)
+    suggestion_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+class RecommendationRun(PrototypeBase):
+    """One time `POST /next_steps/recommend` went to the model. Written before the call, so
+    a second request arriving meanwhile sees it. `fingerprint` is what the model was shown,
+    or "failed" when the call did not finish."""
+
+    __tablename__ = "rl_recommendation_run"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    fingerprint = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+class ReviewRun(PrototypeBase):
+    """One AI review of a reflection, claimed before the model is called, so a second
+    request (a double click, another tab, a retry) does not pay for and save a second set
+    of suggestions. status: running | done | failed."""
+
+    __tablename__ = "rl_review_run"
+    voice_memo_id = Column(Integer, ForeignKey("voice_memo.id"), primary_key=True)
+    status = Column(String, nullable=False, default="running")
+    started_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+class SetAside(PrototypeBase):
+    """One row each time a connection leaves the user's working set: retracted from the memo
+    or rejected at review. It holds the status the connection had before, which is what
+    restore puts back, and the time, which reflection_connection has no column for."""
+
+    __tablename__ = "rl_set_aside"
+    id = Column(Integer, primary_key=True)
+    connection_id = Column(Integer, ForeignKey("reflection_connection.id"), nullable=False, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    kind = Column(String, nullable=False)  # retracted | rejected
+    previous_status = Column(String, nullable=False)
+    set_aside_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    restored_at = Column(DateTime(timezone=True))
+
+
+class Activity(PrototypeBase):
+    """The activity log: one row per thing the AI suggested or the user decided. Written only
+    by services/activity.py, where the kind strings are listed."""
+
+    __tablename__ = "rl_activity"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    actor = Column(String, nullable=False)  # ai | user
+    kind = Column(String, nullable=False)
+    summary = Column(Text, nullable=False)
+    refs_json = Column(Text, nullable=False, default="{}")  # JSON object of ids
+
+
+# --- Questions screen and notebook levers (2026-11-18). New tables only.
+
+
+class HighlightQuestion(PrototypeBase):
+    """A highlight filed under a research question by the user. Not audit data: replacing a
+    highlight's questions, or deleting the highlight, deletes its rows."""
+
+    __tablename__ = "rl_highlight_question"
+    id = Column(Integer, primary_key=True)
+    highlight_id = Column(Integer, ForeignKey("rl_highlight.id"), nullable=False, index=True)
+    research_question_id = Column(Integer, ForeignKey("research_question.id"), nullable=False, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+    __table_args__ = (
+        UniqueConstraint("highlight_id", "research_question_id", name="uq_rl_highlight_question"),
+    )
+
+
+class InsightMove(PrototypeBase):
+    """One move of a filed insight from one research question to another (either side null
+    for "doesn't fit a question yet"). reflection_connection_revision has no column for the
+    question an insight was under, so the move is recorded here."""
+
+    __tablename__ = "rl_insight_move"
+    id = Column(Integer, primary_key=True)
+    connection_id = Column(Integer, ForeignKey("reflection_connection.id"), nullable=False, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    from_research_question_id = Column(Integer)
+    to_research_question_id = Column(Integer)
+    moved_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+class InsightMerge(PrototypeBase):
+    """One merge of a filed insight (the source) into another (the target). The target gained
+    the evidence rows listed here and the source's status became "merged". Undo sets the
+    status; the row is kept."""
+
+    __tablename__ = "rl_insight_merge"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    source_connection_id = Column(Integer, ForeignKey("reflection_connection.id"), nullable=False, index=True)
+    target_connection_id = Column(Integer, ForeignKey("reflection_connection.id"), nullable=False, index=True)
+    source_previous_status = Column(String, nullable=False)
+    # JSON [{id, snippet_id, start_index, end_index}]: the evidence rows the target gained.
+    # Undo matches on the span, because editing the target's evidence re-creates its rows.
+    added_evidence_json = Column(Text, nullable=False, default="[]")
+    status = Column(String, nullable=False, default="active")  # active -> undone
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    undone_at = Column(DateTime(timezone=True))
+
+
+class MergeNudge(PrototypeBase):
+    """An AI suggestion that two research questions look alike, or that two insights under
+    one question say nearly the same thing. Dismissed means "kept separate"; a pair with any
+    row here is never suggested again."""
+
+    __tablename__ = "rl_merge_nudge"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    kind = Column(String, nullable=False)  # questions | insights
+    item_a_id = Column(Integer, nullable=False)  # research_question.id or reflection_connection.id
+    item_b_id = Column(Integer, nullable=False)
+    default_target_id = Column(Integer, nullable=False)  # one of the two
+    research_question_id = Column(Integer)  # insights: the question both were under
+    reason = Column(Text, nullable=False)
+    suggested_wording = Column(Text)  # questions only
+    status = Column(String, nullable=False, default="suggested")  # suggested -> accepted | dismissed
+    result_merge_id = Column(Integer)  # rl_rq_merge.id or rl_insight_merge.id once accepted
+    ai_metadata = Column(Text)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+
+
+class PassageSuggestion(PrototypeBase):
+    """A transcript passage the AI found for a research question. Accepting creates a real
+    highlight (highlight_id, not a foreign key, so deleting that highlight later is not
+    blocked) filed under the question."""
+
+    __tablename__ = "rl_passage_suggestion"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    research_question_id = Column(Integer, ForeignKey("research_question.id"), nullable=False, index=True)
+    conversation_id = Column(Integer, nullable=False)
+    snippet_id = Column(Integer, nullable=False)
+    start_index = Column(Integer, nullable=False)
+    end_index = Column(Integer, nullable=False)
+    reason = Column(Text, nullable=False)
+    status = Column(String, nullable=False, default="suggested")  # suggested -> accepted | dismissed
+    highlight_id = Column(Integer)
+    ai_metadata = Column(Text)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+
+
+class QuestionGap(PrototypeBase):
+    """One "what am I missing" observation the AI made about a research question, optionally
+    naming conversations the user has not opened."""
+
+    __tablename__ = "rl_question_gap"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    research_question_id = Column(Integer, ForeignKey("research_question.id"), nullable=False, index=True)
+    gap_kind = Column(String, nullable=False)  # perspective | counter_view | thin_spot
+    observation = Column(Text, nullable=False)
+    conversation_ids_json = Column(Text, nullable=False, default="[]")  # validated Cortico ids
+    status = Column(String, nullable=False, default="suggested")  # suggested -> dismissed
+    ai_metadata = Column(Text)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+
+
+class RLCorticoGuide(PrototypeBase):
+    """Read-through cache of a project's latest conversation guide questions (cortico_api
+    mode), so listing guide ideas does not call Cortico per conversation."""
+
+    __tablename__ = "rl_cortico_guide"
+    project_id = Column(Integer, primary_key=True, autoincrement=False)
+    questions_json = Column(Text, nullable=False, default="[]")  # [{id, text, shorthand_code, order_index}]
+    fetched_at = Column(DateTime(timezone=True), nullable=False, default=_now)

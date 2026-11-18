@@ -1,0 +1,4 @@
+# Local voice-memo transcription (about 500 MB model download on first use).
+-r requirements.txt
+faster-whisper==1.1.1
+av==13.1.0  # keep: 19.x breaks faster-whisper (docs/prototype-log.md)

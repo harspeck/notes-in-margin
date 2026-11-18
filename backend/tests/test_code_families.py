@@ -3,7 +3,9 @@ test_next_steps.py: pure/DB-level helpers are unit-tested directly against real 
 live gpt-5.6-luna round trip is exercised manually (see docs/prototype-log.md) rather than
 in automated tests."""
 from fastapi.testclient import TestClient
+import pytest
 
+from app.auth import CurrentUser, current_user
 from app.db import PrototypeSession
 from app.main import app
 import json
@@ -26,6 +28,17 @@ from app.services.code_families import (
 )
 
 client = TestClient(app)
+
+FIXTURE_USER = 80001
+
+
+@pytest.fixture(autouse=True)
+def _act_as_fixture_user():
+    """Routes only serve rows the caller owns, and this module's rows belong to FIXTURE_USER."""
+    app.dependency_overrides[current_user] = lambda: CurrentUser(id=FIXTURE_USER)
+    yield
+    app.dependency_overrides.pop(current_user, None)
+
 
 _DEFAULT_AI_METADATA = {"model": "m", "reasoning_effort": "low", "prompt": "p"}
 

@@ -1,6 +1,24 @@
 # Prototype config — model id/effort and other tunables live here, not in code,
 # so they can change without a rebuild (PRD: "AI behavior" / "Model and editable prompt").
 
+# "snapshot": local read-only Cortico copy, single implicit user (default_user_id).
+# "cortico_api": users sign in with Cortico; reads go to the v2 API. Env DATA_SOURCE overrides.
+data_source: "snapshot"
+
+cortico:
+  base_url: "https://api2.cortico.ai"
+  timeout_seconds: 20
+  max_retries: 2
+  snippet_cache_ttl_seconds: 3600
+  tool_id: "notes-in-the-margin"
+  write_back:
+    highlights: true
+
+session:
+  cookie_name: "nim_session"
+  max_age_days: 7
+  cookie_samesite: "lax"
+
 default_user_id: 101
 default_project_id: 5
 
@@ -9,8 +27,10 @@ prototype_db_path: "db/prototype.db"
 audio_dir: "db/local/audio"
 
 ai_review:
-  model: "gpt-5.6-luna"
+  provider: "anthropic"
+  model: "claude-opus-5-5"
   reasoning_effort: "low"
+  max_output_tokens: 32000
 
 transcription:
   engine: "faster-whisper (local)"
@@ -25,3 +45,41 @@ code_families:
   max_per_rq: 5
   near_cap_at: 4
   max_new_per_run: 2
+
+# Look-alike questions and near-duplicate insights the AI may suggest merging, per run.
+merge_nudges:
+  max_question_pairs_per_run: 2
+  max_insight_pairs_per_run: 3
+
+# "Find more passages" on a question. Without a conversation it searches the user's most
+# recently opened ones, one model call each.
+find_passages:
+  max_conversations_per_run: 3
+  max_passages_per_conversation: 5
+  max_insights_in_prompt: 8
+
+# "What am I missing" on a question.
+whats_missing:
+  max_observations: 3
+  max_unopened_conversations: 150
+
+# Lines the AI offers under "What you want to hear next", from the user's questions and
+# newest highlights. Runs on its own when the Desk opens, so it uses the small model and is
+# cached: no new call until the questions or highlights change and every offer is decided.
+listening_suggestions:
+  model: "claude-haiku-5-5"
+  reasoning_effort: "low"
+  max_suggestions: 3
+  recent_highlights: 15
+  min_minutes_between_runs: 10
+
+# Conversation summaries ("gists") made through the app, for conversations read from Cortico.
+gists:
+  model: "claude-haiku-5-5"
+  reasoning_effort: "low"
+  max_per_request: 5
+  sample_snippets: 20
+
+# The conversation recommended after a session (POST /next_steps/recommend).
+next_steps:
+  min_minutes_between_auto_runs: 30

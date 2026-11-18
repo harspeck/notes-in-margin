@@ -55,11 +55,12 @@ function EntryView({ entry, onChanged }: { entry: MemoEntry; onChanged: () => vo
         </p>
       )}
       <div className="meta">
-        <Link to={`/?conversation=${entry.conversation_id}`}>{entry.conversation_title}</Link>
+        <Link to={`/read/${entry.conversation_id}`}>{entry.conversation_title}</Link>
         {" · "}
         {new Date(entry.filed_at).toLocaleString()}
         {" · "}
-        {entry.voice_memo_audio_path && (
+        {entry.voice_memo_typed && "written reflection"}
+        {entry.voice_memo_audio_path && !entry.voice_memo_typed && (
           <a
             href={`${audioUrlFor(entry.voice_memo_audio_path)}${entry.reflection_timestamp != null ? `#t=${Math.floor(entry.reflection_timestamp)}` : ""}`}
             target="_blank"
@@ -75,10 +76,10 @@ function EntryView({ entry, onChanged }: { entry: MemoEntry; onChanged: () => vo
         Evidence:
         {entry.evidence.map((e, i) => (
           <div key={i} style={{ marginLeft: "0.5rem" }}>
-            <Link to={`/?conversation=${entry.conversation_id}&snippet=${e.snippet_id}`}>"{e.text || `snippet ${e.snippet_id}`}"</Link>{" "}
+            <Link to={`/read/${e.conversation_id ?? entry.conversation_id}?snippet=${e.snippet_id}`}>"{e.text || `snippet ${e.snippet_id}`}"</Link>{" "}
             ({e.source === "user" ? "yours" : "AI-suggested"}
             {e.starred ? ", starred" : ""})
-            <button style={{ fontSize: "0.7rem" }} onClick={() => removeEvidence(i)}>
+            <button style={{ fontSize: "0.7rem" }} onClick={() => removeEvidence(i)} aria-label="Remove this passage">
               ×
             </button>
           </div>
@@ -89,7 +90,7 @@ function EntryView({ entry, onChanged }: { entry: MemoEntry; onChanged: () => vo
           Edit
         </button>
         <button className="secondary" onClick={retract} style={{ marginLeft: "0.3rem" }}>
-          Retract
+          Set aside
         </button>
       </div>
     </div>
@@ -112,7 +113,7 @@ function NextStepView({ suggestion, onChanged }: { suggestion: NextStepSuggestio
       {suggestion.recommended_conversation_id != null && (
         <p style={{ margin: 0 }}>
           Listen to:{" "}
-          <Link to={`/?conversation=${suggestion.recommended_conversation_id}`}>
+          <Link to={`/read/${suggestion.recommended_conversation_id}`}>
             <em>{suggestion.recommended_conversation_title}</em>
           </Link>
         </p>
@@ -258,7 +259,7 @@ export default function MemoPage() {
           <h2>Starred, unassigned</h2>
           {memo.starred_unassigned.map((group) => (
             <div key={group.conversation_id} style={{ marginBottom: "1rem" }}>
-              <Link to={`/?conversation=${group.conversation_id}`}>{group.conversation_title}</Link>
+              <Link to={`/read/${group.conversation_id}`}>{group.conversation_title}</Link>
               {group.highlights.map((h) => (
                 <div key={h.highlight_id} style={{ fontSize: "0.9rem", marginLeft: "1rem" }}>
                   ★ {h.notes || "(no memo text)"}

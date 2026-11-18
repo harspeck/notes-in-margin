@@ -31,3 +31,11 @@ Backend/.env/
 # OS / editor
 .DS_Store
 .vscode/
+
+# Claude Code worktrees
+.claude/worktrees/
+
+# Vercel CLI links (never commit). The root vercel.json is the real deploy config.
+.vercel
+vercel.json
+!/vercel.json

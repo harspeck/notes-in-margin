@@ -14,6 +14,10 @@ they come from resolving its granularity question (`docs/prototype-log.md`).
   `FILED_STATUSES = ("accepted", "edited")`. This tuple is duplicated in `routers/memo.py`;
   change both together.
 - The frontend's status unions are in `frontend/src/lib/types.ts`.
+- Moving an insight to another question (`PATCH /memo/connections/{id}`) removes it from
+  families outside its new question's group, after a family revision. An insight merged
+  into another (connection status `merged`) keeps its memberships, like a retracted one, and
+  is left out of `/codebook_prep` the same way.
 
 ## Cap (`config.code_families` in `backend/config.yaml`)
 

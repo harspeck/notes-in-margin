@@ -252,3 +252,70 @@ working set of RQs, merge RQs, edit and star code families, and export a draft c
   in `db/local/` are untouched. Retracted member entries are left out.
 - Tests: `test_rq_merges.py`, `test_code_family_edits.py`, `test_organize.py` (78 tests in
   all). None calls the model.
+
+## Server-side state for the hosted app (2026-11-18)
+
+The hosted app (`cortico_api` mode) dead-ended after highlighting, because a voice memo was
+the only thing that created insights and recording answers 501 there. Several pieces of
+state also lived only in the browser.
+
+- **New tables only**, so neither `db/prototype.db` nor Neon needs a migration:
+  `rl_reading_state`, `rl_review_draft`, `rl_listening_interest`, `rl_set_aside` and
+  `rl_activity`. The names were grepped against `db/schema.sql` and don't collide. On Neon
+  they are created by `scripts/init_db.py` (or the app's startup `create_all`).
+- **Typed reflections** reuse `voice_memo` with no column change: `audio_path` is NOT NULL,
+  so a typed reflection stores an empty string there, and "typed" is derived from that.
+- **`rl_set_aside` is a deviation from the plan**, which asked for the set-aside list to use
+  revision rows or existing timestamps. Restore has to put back the filed status a retracted
+  entry had, and no existing column or revision row records it; the same row gives an exact
+  time. Connections set aside earlier fall back to `updated_at` and a rule of thumb for the
+  status, both labelled in the API (`set_aside_at_source`, `restores_to`).
+- **Listening interests** are imported once per user from `voice_memo.extracted_interests`.
+  The column is still written, so nothing that reads it breaks.
+- **Activity log**: best effort by design. `log_activity` adds its row to the caller's
+  transaction and swallows its own errors. Nothing was backfilled, so the log starts at
+  deployment.
+- Tests: `test_typed_reflection_and_desk.py`, `test_listening_interests.py`,
+  `test_set_aside_and_activity.py`, plus two in `test_cortico_api_mode.py` (137 tests in
+  all). None calls the model. Nothing was run against Postgres.
+
+## The Questions screen and the notebook's AI levers (2026-11-18)
+
+Backend for the mock `mocks/mock-e-after-sync-cortico.html`: highlights filed under
+questions, breadth, starting questions from the conversation guide, moving and merging
+insights, merge nudges, "find more passages" and "what am I missing".
+
+- **New tables only**, so neither `db/prototype.db` nor Neon needs a migration:
+  `rl_highlight_question`, `rl_insight_move`, `rl_insight_merge`, `rl_merge_nudge`,
+  `rl_passage_suggestion`, `rl_question_gap` and `rl_cortico_guide`. The names were grepped
+  against `db/schema.sql` and don't collide. On Neon they are created by
+  `scripts/init_db.py` (or the app's startup `create_all`).
+- **A new connection status, `merged`**, for an insight folded into another. It is a value
+  in the existing string column, not a schema change. It is neither filed nor set aside.
+- **`rl_insight_move` exists because the revision table can't hold the question.**
+  `reflection_connection_revision` has `insight_text` and `evidence_snapshot` only, and
+  adding a column was ruled out, so a move writes the usual revision and a move row.
+- **Decisions made while building, none of them in a PRD:**
+  - A move alone does not mark the insight `edited`: its words did not change.
+  - A move takes the insight out of code families of the question it left, because a family
+    holds entries of one question's group. The family revision keeps the record.
+  - Two insights can be merged by hand across questions. Only the AI nudge is limited to
+    insights under the same question.
+  - Merging does not rewrite the target's text. The mock says "You can reword it after".
+  - Undo matches the evidence a merge added by span, not by row id: an evidence edit
+    deletes and re-creates rows, and SQLite reuses ids.
+  - `POST /question_gaps/{id}/listen_next` creates `suggested` next steps, not `accepted`
+    ones, because `suggested` is what the desk's Listen next list shows.
+  - Guide ideas are not filtered by content. A guide's consent and guidelines prompts come
+    back as ideas, since telling them from real questions would be a keyword heuristic.
+  - `ApiSource.guide_questions` now reads through `rl_cortico_guide`. Opening a conversation
+    no longer calls `/v2/conversation-guides` every time; a changed guide shows after
+    `cortico.snippet_cache_ttl_seconds` (one hour).
+- **Not measured:** no model was called. The three new prompts have never run against
+  Claude, so their output quality, token use and timing are unknown. Find more passages
+  makes up to three calls in one request, which has not been timed against Vercel's 300 s
+  limit.
+- Tests: `test_highlight_questions.py`, `test_insight_moves_and_merges.py`,
+  `test_merge_nudges.py`, `test_question_levers.py`, plus three in
+  `test_cortico_api_mode.py` (177 tests in all). None calls the model. Nothing was run
+  against Postgres or the real Cortico API.

@@ -15,12 +15,13 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from openai import OpenAI
 from sqlalchemy.orm import Session
 
-from ..config import Config
+from ..config import Config, get_config
 from ..evidence_provenance import highlight_spans, resolve_evidence
-from ..models_cortico import Participant, Snippet
+from ..cortico.source import as_source
+from ..llm import structured_json
+from . import activity, listening_interests
 from ..models_prototype import (
     AppSetting,
     ConnectionEvidence,
@@ -55,23 +56,33 @@ can't locate a specific span.
 REVIEW_PROMPT_SETTING_KEY = "review_prompt"
 
 
-def get_review_prompt(prototype_db: Session) -> str:
-    row = prototype_db.get(AppSetting, REVIEW_PROMPT_SETTING_KEY)
+def _review_prompt_key(user_id: int) -> str:
+    return f"{REVIEW_PROMPT_SETTING_KEY}:{user_id}"
+
+
+def get_review_prompt(prototype_db: Session, user_id: int) -> str:
+    """The user's own prompt, else the default. The pre-multi-user global prompt belonged to
+    the single snapshot-mode user, so only that user falls back to it."""
+    row = prototype_db.get(AppSetting, _review_prompt_key(user_id))
+    if row is None and user_id == get_config().default_user_id:
+        row = prototype_db.get(AppSetting, REVIEW_PROMPT_SETTING_KEY)
     return row.value if row else DEFAULT_REVIEW_PROMPT
 
 
-def set_review_prompt(prototype_db: Session, text: str) -> None:
-    row = prototype_db.get(AppSetting, REVIEW_PROMPT_SETTING_KEY)
+def set_review_prompt(prototype_db: Session, text: str, user_id: int) -> None:
+    key = _review_prompt_key(user_id)
+    row = prototype_db.get(AppSetting, key)
     if row:
         row.value = text
     else:
-        row = AppSetting(key=REVIEW_PROMPT_SETTING_KEY, value=text)
+        row = AppSetting(key=key, value=text)
         prototype_db.add(row)
     prototype_db.commit()
 
 
-def reset_review_prompt(prototype_db: Session) -> str:
-    set_review_prompt(prototype_db, DEFAULT_REVIEW_PROMPT)
+def reset_review_prompt(prototype_db: Session, user_id: int) -> str:
+    # Written, not deleted, so a reset user doesn't fall back to the global prompt.
+    set_review_prompt(prototype_db, DEFAULT_REVIEW_PROMPT, user_id)
     return DEFAULT_REVIEW_PROMPT
 
 
@@ -123,30 +134,16 @@ _OUTPUT_SCHEMA = {
 
 
 def _build_transcript_context(cortico_db: Session, conversation_id: int) -> list[dict]:
-    snippets = (
-        cortico_db.query(Snippet)
-        .filter(Snippet.conversation_id == conversation_id)
-        .order_by(Snippet.order_index)
-        .all()
-    )
-    participants = {
-        p.id: p for p in cortico_db.query(Participant).filter(
-            Participant.conversation_id == conversation_id
-        )
-    }
-    out = []
-    for s in snippets:
-        speaker = participants.get(s.participant_id)
-        out.append(
-            {
-                "snippet_id": s.id,
-                "speaker": speaker.name if speaker else None,
-                "is_facilitator": bool(speaker.is_facilitator) if speaker else False,
-                "text": s.text,
-                "word_count": len(json.loads(s.words)) if s.words else 0,
-            }
-        )
-    return out
+    return [
+        {
+            "snippet_id": s.id,
+            "speaker": s.speaker_name,
+            "is_facilitator": s.is_facilitator,
+            "text": s.text,
+            "word_count": len(s.words),
+        }
+        for s in as_source(cortico_db).snippets(conversation_id)
+    ]
 
 
 def _build_highlight_context(prototype_db: Session, user_id: int, conversation_id: int) -> list[dict]:
@@ -187,11 +184,10 @@ def reflection_timestamp_from_words(
 def _validate_evidence_in_range(
     cortico_db: Session, conversation_id: int, snippet_id: int, start_index: int, end_index: int
 ) -> bool:
-    snippet = cortico_db.get(Snippet, snippet_id)
+    snippet = as_source(cortico_db).snippets_by_ids({snippet_id}).get(snippet_id)
     if snippet is None or snippet.conversation_id != conversation_id:
         return False
-    word_count = len(json.loads(snippet.words)) if snippet.words else 0
-    return 0 <= start_index < end_index <= word_count
+    return 0 <= start_index < end_index <= len(snippet.words)
 
 
 def generate_connections(
@@ -215,7 +211,7 @@ def generate_connections(
         .order_by(ResearchQuestion.display_order)
         .all()
     )
-    prompt = get_review_prompt(prototype_db)
+    prompt = get_review_prompt(prototype_db, voice_memo.user_id)
 
     reflection_word_count = len(json.loads(voice_memo.transcription_raw)) if voice_memo.transcription_raw else 0
 
@@ -231,31 +227,17 @@ def generate_connections(
         ),
     }
 
-    client = OpenAI()
-    response = client.responses.create(
-        model=config.ai_review.model,
-        reasoning={"effort": config.ai_review.reasoning_effort},
-        input=[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": json.dumps(payload)},
-        ],
-        text={
-            "format": {
-                "type": "json_schema",
-                "name": "reflection_review",
-                "schema": _OUTPUT_SCHEMA,
-                "strict": True,
-            }
-        },
+    answer = structured_json(
+        system=prompt, user=json.dumps(payload), schema=_OUTPUT_SCHEMA, name="reflection_review"
     )
-    result = json.loads(response.output_text)
     return persist_review_result(
         prototype_db=prototype_db,
         cortico_db=cortico_db,
         voice_memo=voice_memo,
-        result=result,
+        result=answer.data,
         prompt=prompt,
         config=config,
+        model=answer.model,
     )
 
 
@@ -267,6 +249,7 @@ def persist_review_result(
     result: dict,
     prompt: str,
     config: Config,
+    model: str | None = None,
 ) -> list[ReflectionConnection]:
     """Validates and persists the model's parsed output. Split from the API call so the
     deterministic half (validation, highlight linking) is testable without a model.
@@ -278,10 +261,18 @@ def persist_review_result(
     starred-highlight guarantee lives in the review router: any starred highlight this
     linking doesn't attach to an RQ connection is returned as starred-unassigned.
     """
+    # Before the column is overwritten, so the one-time import still sees its old value.
+    listening_interests.add_from_reflection(prototype_db, voice_memo, result.get("extracted_interests", []))
     voice_memo.extracted_interests = json.dumps(result.get("extracted_interests", []))
     spans = highlight_spans(prototype_db, voice_memo.user_id, voice_memo.conversation_id)
     starred_ids = {s.highlight_id for s in spans if s.starred}
 
+    own_question_ids = {
+        r.id
+        for r in prototype_db.query(ResearchQuestion.id).filter(
+            ResearchQuestion.user_id == voice_memo.user_id, ResearchQuestion.archived.is_(False)
+        )
+    }
     created: list[ReflectionConnection] = []
     for conn in result.get("connections", []):
         valid_evidence = []
@@ -303,13 +294,16 @@ def persist_review_result(
 
         connection = ReflectionConnection(
             voice_memo_id=voice_memo.id,
-            research_question_id=conn.get("research_question_id"),
+            # An id the model invented, or another user's, becomes "doesn't fit a question".
+            research_question_id=(
+                conn.get("research_question_id") if conn.get("research_question_id") in own_question_ids else None
+            ),
             insight_text=conn["insight_text"],
             source="ai",
             status="suggested",
             ai_metadata=json.dumps(
                 {
-                    "model": config.ai_review.model,
+                    "model": model or config.ai_review.model,
                     "reasoning_effort": config.ai_review.reasoning_effort,
                     "prompt": prompt,
                     "confidence": conn.get("confidence"),
@@ -347,5 +341,12 @@ def persist_review_result(
             )
         created.append(connection)
 
+    activity.log_activity(
+        prototype_db, voice_memo.user_id, "ai", activity.INSIGHTS_SUGGESTED,
+        f"The AI suggested {activity.plural(len(created), 'insight')} for your reflection."
+        if created
+        else "The AI found no insights to suggest for your reflection.",
+        conversation_id=voice_memo.conversation_id, voice_memo_id=voice_memo.id, count=len(created),
+    )
     prototype_db.commit()
     return created

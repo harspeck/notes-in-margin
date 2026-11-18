@@ -1,6 +1,6 @@
 # Tests
 
-Run them with `cd backend && .venv/bin/python -m pytest -q` (78 tests, about 1.7 s). They
+Run them with `cd backend && OPENAI_API_KEY=sk-fake .venv/bin/python -m pytest -q` (195 tests, about 4.5 s). They
 need no network, API key or running server.
 
 ## Environment (`backend/tests/conftest.py`)
@@ -9,16 +9,25 @@ need no network, API key or running server.
   `app` (with `os.environ.setdefault`), and runs `create_all` once per session. Never export
   `PROTOTYPE_DB_PATH` to the real `db/prototype.db`, because the tests would then write into
   it.
-- **Snapshot:** tests use the real Cortico snapshot, not a copy. `acp_pipeline_snapshot.db`
-  must be at the repo root (symlink it into a worktree). Tests assert on its data:
+- **Snapshot:** tests use the real Cortico snapshot when `acp_pipeline_snapshot.db` is at
+  the repo root (symlink it into a worktree), or whatever `CORTICO_DB_PATH` names (an
+  absolute path). Otherwise conftest builds a synthetic stand-in with
+  `fixtures/build_snapshot_fixture.py` into a temp file and sets `CORTICO_DB_PATH` before
+  importing `app`. The builder executes `db/schema.sql` into that new file only, refuses
+  to overwrite an existing file, and is deterministic. Its text is invented, every
+  `cortico_id` is the local id plus 100000, and it mirrors the quirks the code depends on
+  (no `conversation_guide_id` or `audio_url` set, conversations 160, 162 and 201 with no
+  snippets, guide `order_index` restarting per section). A new test that asserts on other
+  real data must add that data to the builder. Tests assert on:
   - 201 conversations
-  - conversations 1, 9 and 10
-  - snippets 1936 and 1938
+  - conversations 1, 9 and 10 (1 in project 1, which has no guide; 9 and 10 in project 5)
+  - conversations 12 to 16, each with at least three snippets of 20 or more words
+  - snippets 1936 and 1938 (in conversation 9)
   - guide question 4
   - the guide codes "Consent", "Guidelines" and "Q1 Intros"
 - **No lifespan:** routers are exercised with `TestClient(app)` outside a `with` block, so
   the lifespan (`create_all` and the RQ seed) does not run.
-- **No model:** no test calls OpenAI or loads Whisper. Logic that runs after an LLM call is
+- **No model:** no test calls Claude or OpenAI or loads Whisper. Logic that runs after an LLM call is
   tested by feeding hand-built model output to the helpers. A live round trip is checked by
   hand, and only with the user's go-ahead, because it costs money.
 
@@ -33,6 +42,14 @@ need no network, API key or running server.
 | `test_highlights.py` | The full corpus is listed; a highlight's `project_id` comes from Cortico; 404s |
 | `test_reflection_timestamp.py` | `reflection_timestamp_from_words` (a pure function) |
 | `test_review_filing.py` | `file_to_memo` is the single write point; rejected rows are kept; checkpoint upsert |
+| `test_typed_reflection_and_desk.py` | A typed reflection through review, filing and the memo; reading position upsert; `GET /desk` lanes, cap and per-user scope; review draft round trip, size cap, deletion on filing, 404 for another user |
+| `test_listening_interests.py` | The one-time import, add, edit and remove (a status change), review output adding lines without duplicates, next steps reading the active lines |
+| `test_set_aside_and_activity.py` | The set-aside list; restore of a retracted entry (earlier filed status, revision first) and of a rejected proposal (back to `suggested`, filed only through `file_to_memo`); activity rows for each logged action, the filters and paging; `log_activity` never raising; every kind constant registered |
+| `test_cortico_api_mode.py` | `cortico_api` mode against a fake Cortico: sign-in, workspaces, API reads and caches, highlight write-back, token refresh, per-user isolation, the 501 for audio upload, a typed reflection filed while hosted, the desk scoped to the workspace, guide ideas (the exact Cortico calls made, the guide cache, the fetch cap), and breadth, find passages, passage accept with write-back and what am I missing while hosted |
+| `test_highlight_questions.py` | `PUT /highlights/{id}/questions` (replace, ownership, archived, merged questions resolved), the highlight serialization, the uncited-highlights list over a merged group, links deleted with the highlight, breadth, guide ideas |
+| `test_insight_moves_and_merges.py` | A move (revision and `rl_insight_move` first, status untouched, null target, family membership removed), merge by hand (evidence copied once through `resolve_evidence`, source `merged`, per-evidence conversations in memo, organize and review), undo (exact evidence, earlier status, 409 when undone or stale), `merged` guarded in filing, edit, retract and restore, a memo evidence edit across conversations |
+| `test_merge_nudges.py` | `_apply_nudges` with hand-built output (invalid ids, pairs across questions, repeats, pairs merged by hand, caps, default target), generate against a stand-in model, accept going through `merge_rq` and `merge_insights`, 409 when stale, dismiss never suggested again |
+| `test_question_levers.py` | `_apply_passages` and `_apply_gaps` with hand-built output (unknown snippets, bad ranges, overlaps, unknown conversations, caps), find passages for one conversation and for the recently opened, accept creating a filed highlight once, a failed model call, what am I missing with and without gists, listen next without duplicates, reads under a merged question |
 | `test_next_steps.py` | Id validation, interest accumulation, engaged ids, accept and dismiss |
 | `test_export_md.py` | The backup script: export contents, previous export moved aside, database copy complete, backups never overwrite each other |
 | `test_code_families.py` | Validation, `_apply_family_results`, the cap, merges, `accept_merge`, 409 on a stale merge, the state endpoint |
@@ -46,7 +63,14 @@ need no network, API key or running server.
   then calls through `TestClient(app)`. `test_highlights.py` is the smallest example.
 - **Logic after an LLM call:** copy `test_code_families.py`. It builds the raw model output
   by hand, including invalid ids, and passes it to the `_apply_*` helpers.
+- **A route that calls the model:** copy `_fake_model` in `test_merge_nudges.py`. It
+  replaces the service module's `structured_json` with a function that records the payload
+  and returns hand-built output, so the route, the payload and the error path
+  (`AIProviderError`) are tested with no model.
 - **Checks against Cortico data:** copy `test_ai_review_validation.py`.
+- **A per-user route:** copy the `user_id` fixture in `test_typed_reflection_and_desk.py`,
+  which overrides `current_user` with a fresh user id per test, so shared rows from other
+  files can't leak into lists and counts.
 - `/memo`, `/organize` and `/codebook_prep` filter by `config.default_user_id` (101), and every test file shares one database, so tests of those routes create their RQs for user 101 and look rows up by id rather than counting everything.
 - `test_code_families.py` asserts `max_per_rq: 5` from the real `config.yaml`. If you change
   that config value, update the test.

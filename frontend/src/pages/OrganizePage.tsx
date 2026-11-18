@@ -403,7 +403,7 @@ function InsightCard({
         <blockquote key={i} className="evidence-quote">
           {e.starred && <span className="evidence-star" title="Starred highlight">★ </span>}
           {entry.conversation_id != null ? (
-            <Link to={`/?conversation=${entry.conversation_id}&snippet=${e.snippet_id}`}>
+            <Link to={`/read/${e.conversation_id ?? entry.conversation_id}?snippet=${e.snippet_id}`}>
               "{e.text || `snippet ${e.snippet_id}`}"
             </Link>
           ) : (
@@ -416,7 +416,7 @@ function InsightCard({
       ))}
       <div className="meta">
         {entry.conversation_id != null ? (
-          <Link to={`/?conversation=${entry.conversation_id}`}>{entry.conversation_title ?? `Conversation ${entry.conversation_id}`}</Link>
+          <Link to={`/read/${entry.conversation_id}`}>{entry.conversation_title ?? `Conversation ${entry.conversation_id}`}</Link>
         ) : (
           "Unknown conversation"
         )}
@@ -448,13 +448,13 @@ function StarredNotCited({ group }: { group: OrganizeGroup }) {
       <p className="meta">Starred highlights from these conversations that no filed insight cites yet.</p>
       {group.starred_unassigned.map((conv) => (
         <div key={conv.conversation_id} className="starred-conversation">
-          <Link to={`/?conversation=${conv.conversation_id}`}>{conv.conversation_title ?? `Conversation ${conv.conversation_id}`}</Link>
+          <Link to={`/read/${conv.conversation_id}`}>{conv.conversation_title ?? `Conversation ${conv.conversation_id}`}</Link>
           {conv.highlights.map((h) => (
             <div key={h.highlight_id} className="starred-highlight">
               <div>★ {h.notes || <span className="meta">(no margin note)</span>}</div>
               {h.snippets.map((s, i) => (
                 <blockquote key={i} className="evidence-quote">
-                  <Link to={`/?conversation=${conv.conversation_id}&snippet=${s.snippet_id}`}>
+                  <Link to={`/read/${conv.conversation_id}?snippet=${s.snippet_id}`}>
                     "{s.text || `snippet ${s.snippet_id}`}"
                   </Link>
                 </blockquote>
