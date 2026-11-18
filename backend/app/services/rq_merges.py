@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
+from . import activity
 from ..models_prototype import CodeFamily, ReflectionConnection, ResearchQuestion, RQMerge
 
 
@@ -90,6 +91,12 @@ def merge_rq(session: Session, *, user_id: int, source: ResearchQuestion, target
     merge = RQMerge(user_id=user_id, source_rq_id=source.id, target_rq_id=target.id, status="active")
     session.add(merge)
     source.archived = True
+    session.flush()
+    activity.log_activity(
+        session, user_id, "user", activity.RQ_MERGED,
+        f"You merged \u201c{activity.excerpt(source.name, 60)}\u201d into \u201c{activity.excerpt(target.name, 60)}\u201d.",
+        research_question_id=target.id, source_rq_id=source.id, rq_merge_id=merge.id,
+    )
     session.commit()
     session.refresh(merge)
     return merge
@@ -130,5 +137,10 @@ def undo_merge(session: Session, merge: RQMerge) -> list[CodeFamily]:
     kept = [
         f for f in families if any(rq_by_connection.get(m.connection_id) in source_group for m in f.members)
     ]
+    activity.log_activity(
+        session, merge.user_id, "user", activity.RQ_MERGE_UNDONE,
+        f"You undid the merge of \u201c{activity.excerpt(source.name, 60)}\u201d.",
+        research_question_id=merge.target_rq_id, source_rq_id=source.id, rq_merge_id=merge.id,
+    )
     session.commit()
     return kept

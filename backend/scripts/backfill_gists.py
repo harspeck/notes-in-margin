@@ -24,29 +24,7 @@ from app.db import CorticoSession, PrototypeBase, PrototypeSession, prototype_en
 from app.llm import structured_json  # noqa: E402
 from app.models_cortico import Community, Conversation, Forum, Project, Snippet  # noqa: E402
 from app.models_prototype import ConversationGist  # noqa: E402
-
-GIST_PROMPT = """You are generating a short reference summary of a community conversation \
-transcript, to help an AI later recommend which conversations are worth listening to next for \
-a given research interest.
-
-Based on the conversation's title, its project/forum/community context, and a sample of \
-substantive snippets (mechanical lines and pure facilitator prompts have already been excluded), \
-write:
-- summary: 2-3 sentences describing what this conversation was actually about and what came up.
-- keywords: 5-10 concrete topics/themes actually present in the sample.
-
-Only describe what the sample actually supports. Don't invent topics, people, or claims that \
-aren't reflected in it."""
-
-_OUTPUT_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "summary": {"type": "string"},
-        "keywords": {"type": "array", "items": {"type": "string"}},
-    },
-    "required": ["summary", "keywords"],
-    "additionalProperties": False,
-}
+from app.services.gists import GIST_PROMPT, OUTPUT_SCHEMA as _OUTPUT_SCHEMA  # noqa: E402
 
 SNIPPET_SAMPLE_SIZE = 20
 

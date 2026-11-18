@@ -3,8 +3,9 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from ..auth import CurrentUser, active_workspace, current_user, workspace_project_ids
+from ..auth import CurrentUser, active_workspace, current_user, get_source, workspace_project_ids
 from ..config import get_config
+from ..cortico.source import CorticoSource
 from ..db import get_prototype_db
 from ..models_prototype import ResearchQuestion, RQFocus, RQMerge
 from ..ownership import owned_rq, owned_rq_merge, owns_rq
@@ -15,6 +16,7 @@ from ..schemas import (
     ResearchQuestionUpdate,
     RQMergeRequest,
 )
+from ..services import activity, questions
 from ..services.rq_merges import active_merge_edges, merge_rq, resolve_rq_id, rq_group_ids, undo_merge
 
 router = APIRouter(prefix="/research_questions", tags=["research_questions"])
@@ -90,6 +92,42 @@ def list_research_questions(
     return serialize_rqs(prototype_db, rqs)
 
 
+@router.get("/breadth")
+def get_breadth(
+    source: CorticoSource = Depends(get_source), prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
+):
+    """How widely each active question has come up among the conversations the user has
+    opened. See docs/architecture/routers.md for the shape."""
+    project_ids = workspace_project_ids(active_workspace(prototype_db, user))
+    return questions.breadth(prototype_db, source, user.id, project_ids)
+
+
+@router.get("/guide_ideas")
+def get_guide_ideas(
+    source: CorticoSource = Depends(get_source), prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
+):
+    """Conversation-guide questions the user could adopt as research questions."""
+    project_ids = workspace_project_ids(active_workspace(prototype_db, user))
+    return questions.guide_ideas(prototype_db, source, user.id, project_ids)
+
+
+@router.get("/{rq_id}/highlights")
+def list_question_highlights(
+    rq_id: int, source: CorticoSource = Depends(get_source), prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
+):
+    """Highlights filed under this question's merged group that no filed insight cites
+    ("highlights filed here, no insight yet")."""
+    owned_rq(prototype_db, rq_id, user)
+    highlights = questions.uncited_highlights(prototype_db, source, user.id, rq_id)
+    return {
+        "research_question_id": resolve_rq_id(prototype_db, rq_id),
+        "highlights": questions.serialize_question_highlights(prototype_db, source, highlights),
+    }
+
+
 @router.post("")
 def create_research_question(
     body: ResearchQuestionCreate, prototype_db: Session = Depends(get_prototype_db),
@@ -110,6 +148,11 @@ def create_research_question(
         display_order=max_order,
     )
     prototype_db.add(rq)
+    prototype_db.flush()
+    activity.log_activity(
+        prototype_db, user.id, "user", activity.RQ_CREATED,
+        f"You added a research question: \u201c{activity.excerpt(rq.name)}\u201d", research_question_id=rq.id,
+    )
     prototype_db.commit()
     prototype_db.refresh(rq)
     return _serialize(prototype_db, rq)
@@ -121,6 +164,7 @@ def update_research_question(
     user: CurrentUser = Depends(current_user),
 ):
     rq = owned_rq(prototype_db, rq_id, user)
+    before = (rq.name, rq.description, rq.archived)
     if body.name is not None:
         rq.name = body.name
     if body.description is not None:
@@ -129,6 +173,18 @@ def update_research_question(
         if not body.archived and rq.id in active_merge_edges(prototype_db):
             raise HTTPException(409, "this research question is merged into another; undo the merge instead")
         rq.archived = body.archived
+    if (rq.name, rq.description) != before[:2]:
+        activity.log_activity(
+            prototype_db, user.id, "user", activity.RQ_REWORDED,
+            f"You reworded a research question: \u201c{activity.excerpt(rq.name)}\u201d",
+            research_question_id=rq.id, previous_name=before[0] if rq.name != before[0] else None,
+        )
+    if rq.archived != before[2]:
+        activity.log_activity(
+            prototype_db, user.id, "user", activity.RQ_ARCHIVED if rq.archived else activity.RQ_RESTORED,
+            f"You {'archived' if rq.archived else 'restored'} a research question: \u201c{activity.excerpt(rq.name)}\u201d",
+            research_question_id=rq.id,
+        )
     prototype_db.commit()
     prototype_db.refresh(rq)
     return _serialize(prototype_db, rq)

@@ -7,23 +7,34 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from ..auth import CurrentUser, current_user
+from ..auth import CurrentUser, current_user, get_source
 from ..config import get_config
+from ..cortico.source import CorticoSource
 from ..db import PrototypeSession, get_prototype_db
 from ..models_prototype import VoiceMemo
 from ..ownership import owned_voice_memo
-from ..schemas import VoiceMemoEdit
+from ..schemas import TypedReflectionCreate, VoiceMemoEdit
+from ..services import activity
 from ..services.transcription import ENGINE_LABEL, transcribe
 
 router = APIRouter(tags=["voice_memos"])
 config = get_config()
+
+TYPED_ENGINE_LABEL = "typed"
+
+
+def is_typed(vm: VoiceMemo) -> bool:
+    """A typed reflection is a voice memo with no audio. `audio_path` is NOT NULL, so it
+    holds an empty string."""
+    return not vm.audio_path
 
 
 def _serialize(vm: VoiceMemo) -> dict:
     return {
         "id": vm.id,
         "conversation_id": vm.conversation_id,
-        "audio_path": vm.audio_path,
+        "typed": is_typed(vm),
+        "audio_path": vm.audio_path or None,
         "duration": vm.duration,
         "recorded_at": vm.recorded_at.isoformat(),
         "transcription_raw": vm.transcription_raw,
@@ -95,6 +106,11 @@ async def create_voice_memo(
         transcription_progress=0.0,
     )
     prototype_db.add(vm)
+    prototype_db.flush()
+    activity.log_activity(
+        prototype_db, user.id, "user", activity.REFLECTION_RECORDED, "You recorded a reflection.",
+        conversation_id=conversation_id, voice_memo_id=vm.id,
+    )
     prototype_db.commit()
     prototype_db.refresh(vm)
 
@@ -102,6 +118,48 @@ async def create_voice_memo(
         target=_run_transcription_in_background, args=(vm.id, str(dest)), daemon=True
     ).start()
 
+    return _serialize(vm)
+
+
+@router.post("/conversations/{conversation_id}/reflections")
+def create_typed_reflection(
+    conversation_id: int,
+    body: TypedReflectionCreate,
+    source: CorticoSource = Depends(get_source),
+    prototype_db: Session = Depends(get_prototype_db),
+    user: CurrentUser = Depends(current_user),
+):
+    """A reflection the user typed. Stored as a voice memo whose transcription is already
+    complete and which has no audio, so review, filing and the memo treat it like any other.
+    Works in both modes; it is the hosted app's only way to reflect."""
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(422, "text must not be empty")
+    conversation = source.conversation(conversation_id)
+    if conversation is None:
+        raise HTTPException(404, "conversation not found")
+
+    vm = VoiceMemo(
+        user_id=user.id,
+        conversation_id=conversation_id,
+        audio_path="",
+        duration=None,
+        recorded_at=datetime.now(timezone.utc),
+        transcription_raw=None,  # no word timings, so insights carry no reflection_timestamp
+        transcription_edited=text,
+        transcription_engine=TYPED_ENGINE_LABEL,
+        transcription_progress=1.0,
+        status="ready_for_review",
+    )
+    prototype_db.add(vm)
+    prototype_db.flush()
+    activity.log_activity(
+        prototype_db, user.id, "user", activity.REFLECTION_TYPED,
+        f"You wrote a reflection on \u201c{conversation.title}\u201d.",
+        conversation_id=conversation_id, voice_memo_id=vm.id,
+    )
+    prototype_db.commit()
+    prototype_db.refresh(vm)
     return _serialize(vm)
 
 

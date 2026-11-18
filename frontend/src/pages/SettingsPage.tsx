@@ -28,7 +28,7 @@ export default function SettingsPage() {
     <div style={{ maxWidth: 700, margin: "0 auto", padding: "2rem", fontFamily: "sans-serif" }}>
       <h1>AI review prompt</h1>
       <p style={{ color: "#666" }}>
-        This is sent to {`gpt-5.6-luna`} (reasoning effort: low) alongside the voice memo transcription, your
+        This is sent to Claude alongside what you said in your reflection, your
         research questions, the transcript, and your highlights. Edit it and the next review will use your version.
       </p>
       <textarea rows={16} style={{ width: "100%", fontFamily: "monospace" }} value={text} onChange={(e) => setText(e.target.value)} />

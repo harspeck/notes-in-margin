@@ -71,7 +71,7 @@ def write_transcripts(exports: Path, cortico_db: Session, prototype_db: Session)
             f"- **Length:** {mmss(vm.duration)}",
             f"- **Status:** {vm.status}",
             f"- **Transcription engine:** {vm.transcription_engine or 'unknown'}",
-            f"- **Audio:** `{vm.audio_path}`",
+            f"- **Audio:** `{vm.audio_path}`" if vm.audio_path else "- **Audio:** none (typed reflection)",
             "",
             "## Transcript",
             "",

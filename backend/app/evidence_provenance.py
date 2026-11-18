@@ -44,6 +44,23 @@ def highlight_spans(prototype_db: Session, user_id: int, conversation_id: int) -
     ]
 
 
+def user_highlight_spans(prototype_db: Session, user_id: int, snippet_ids: set[int]) -> list[HighlightSpan]:
+    """The user's highlight spans on these snippets, whatever conversation they are in.
+    Snippet ids are unique across conversations, so this is the right candidate set for an
+    insight whose evidence spans several conversations (after an insight merge)."""
+    from .models_prototype import HighlightSnippet
+
+    if not snippet_ids:
+        return []
+    rows = (
+        prototype_db.query(HighlightSnippet, RLHighlight)
+        .join(RLHighlight, RLHighlight.id == HighlightSnippet.highlight_id)
+        .filter(RLHighlight.user_id == user_id, HighlightSnippet.snippet_id.in_(snippet_ids))
+        .all()
+    )
+    return [HighlightSpan(h.id, bool(h.starred), s.snippet_id, s.start_index, s.end_index) for s, h in rows]
+
+
 def match_highlight(
     spans: list[HighlightSpan], snippet_id: int, start_index: int, end_index: int
 ) -> HighlightSpan | None:
@@ -102,10 +119,15 @@ def evidence_row(
 ) -> ConnectionEvidence:
     """Builds a user-side evidence row (review-step add/edit, memo-page edit) so
     highlight_id is set, or kept, the same way the AI review sets it. An explicit
-    highlight_id must belong to the voice memo's user and conversation."""
+    highlight_id must belong to the voice memo's user, and either sit on the voice memo's
+    conversation or cover the evidence's snippet (an insight that gained evidence from
+    another conversation through a merge cites that conversation's highlights)."""
     if ev.highlight_id is not None:
         h = prototype_db.get(RLHighlight, ev.highlight_id)
-        if h is None or h.user_id != vm.user_id or h.conversation_id != vm.conversation_id:
+        if h is None or h.user_id != vm.user_id or not (
+            h.conversation_id == vm.conversation_id
+            or any(s.snippet_id == ev.snippet_id for s in h.snippets)  # type: ignore[attr-defined]
+        ):
             raise HTTPException(400, f"highlight {ev.highlight_id} not found on this conversation")
     highlight_id, source = resolve_evidence(
         spans,

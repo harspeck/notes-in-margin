@@ -9,7 +9,7 @@ from ..auth import CurrentUser, current_user, get_source
 from ..config import get_config
 from ..cortico.source import CorticoSource, as_source
 from ..db import get_prototype_db
-from ..evidence_text import quoted_texts
+from ..evidence_text import evidence_conversations, quoted_texts
 from ..models_prototype import CodeFamily, ReflectionConnection, ResearchQuestion, VoiceMemo
 from ..services.code_families import FILED_STATUSES, starred_family_ids
 from ..services.rq_merges import active_merge_edges, rq_group_ids
@@ -90,13 +90,17 @@ def get_organize(
 
     highlights = starred_highlights(prototype_db, user.id)
     text_by_span = evidence_texts(cortico_db, group_connections, highlights)
-    serialize_evidence = evidence_serializer(prototype_db, group_connections, text_by_span)
+    serialize_evidence = evidence_serializer(prototype_db, group_connections, text_by_span, cortico_db)
     # Computed against every filed connection, like GET /memo, then narrowed per group.
     unassigned = starred_unassigned_groups(cortico_db, filed_connections(prototype_db, user.id), highlights, text_by_span)
 
     groups = []
     for rq_dict, (connections, families) in zip(serialized, loaded):
-        group_conv_ids = {conv_by_connection.get(c.id) for c in connections}
+        evidence_by_connection = {c.id: serialize_evidence(c) for c in connections}
+        # The reflections' conversations, plus any other an entry's evidence comes from.
+        group_conv_ids = {conv_by_connection.get(c.id) for c in connections} | {
+            e["conversation_id"] for evidence in evidence_by_connection.values() for e in evidence
+        }
         family_ids_by_connection: dict[int, list[int]] = {}
         for f in families:
             for m in f.members:
@@ -115,7 +119,7 @@ def get_organize(
                         "conversation_title": titles.get(conv_by_connection.get(c.id)),
                         "voice_memo_id": c.voice_memo_id,
                         "family_ids": family_ids_by_connection.get(c.id, []),
-                        "evidence": serialize_evidence(c),
+                        "evidence": evidence_by_connection[c.id],
                     }
                     for c in connections
                 ],
@@ -179,6 +183,9 @@ def get_codebook_prep(
     text_by_span = quoted_texts(
         cortico_db, [(e.snippet_id, e.start_index, e.end_index) for c in connections.values() for e in c.evidence]
     )
+    conversation_by_snippet = evidence_conversations(
+        cortico_db, {e.snippet_id for c in connections.values() for e in c.evidence}
+    )
 
     def code(f: CodeFamily) -> dict:
         return {
@@ -198,6 +205,10 @@ def get_codebook_prep(
                             "end_index": e.end_index,
                             "text": text_by_span.get((e.snippet_id, e.start_index, e.end_index), ""),
                             "source": e.source,
+                            # The evidence's own conversation; an entry's can span several.
+                            "conversation_id": conversation_by_snippet.get(
+                                e.snippet_id, (conv_by_connection.get(c.id), None)
+                            )[0],
                         }
                         for e in c.evidence
                     ],

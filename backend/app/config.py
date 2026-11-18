@@ -35,6 +35,41 @@ class CodeFamiliesConfig(BaseModel):
     max_new_per_run: int
 
 
+class MergeNudgesConfig(BaseModel):
+    max_question_pairs_per_run: int = 2
+    max_insight_pairs_per_run: int = 3
+
+
+class FindPassagesConfig(BaseModel):
+    max_conversations_per_run: int = 3  # one model call per conversation
+    max_passages_per_conversation: int = 5
+    max_insights_in_prompt: int = 8
+
+
+class WhatsMissingConfig(BaseModel):
+    max_observations: int = 3
+    max_unopened_conversations: int = 150  # how many unopened conversations the model is shown
+
+
+class ListeningSuggestionsConfig(BaseModel):
+    model: str = "claude-haiku-5-5"
+    reasoning_effort: str = "low"
+    max_suggestions: int = 3
+    recent_highlights: int = 15  # how many of the user's newest highlights the model is shown
+    min_minutes_between_runs: int = 10
+
+
+class GistsConfig(BaseModel):
+    model: str = "claude-haiku-5-5"
+    reasoning_effort: str = "low"
+    max_per_request: int = 5  # conversations summarised by one POST /gists/generate
+    sample_snippets: int = 20
+
+
+class NextStepsConfig(BaseModel):
+    min_minutes_between_auto_runs: int = 30  # POST /next_steps/recommend never calls the model sooner
+
+
 class CorticoWriteBackConfig(BaseModel):
     highlights: bool = True
 
@@ -72,6 +107,12 @@ class Config(BaseModel):
     transcription: TranscriptionConfig
     voice_memo: VoiceMemoConfig
     code_families: CodeFamiliesConfig
+    merge_nudges: MergeNudgesConfig = MergeNudgesConfig()
+    find_passages: FindPassagesConfig = FindPassagesConfig()
+    whats_missing: WhatsMissingConfig = WhatsMissingConfig()
+    listening_suggestions: ListeningSuggestionsConfig = ListeningSuggestionsConfig()
+    gists: GistsConfig = GistsConfig()
+    next_steps: NextStepsConfig = NextStepsConfig()
 
     @property
     def project_root(self) -> Path:

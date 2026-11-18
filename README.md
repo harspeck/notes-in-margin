@@ -44,13 +44,13 @@ one user and lists every conversation in it.
 
 With `DATA_SOURCE=cortico_api`, users sign in with their Cortico account, choose a workspace
 (a named bundle of projects in an organization), and the backend reads the Cortico v2 API with
-their token. Highlights are written back to Cortico. The hosted backend is the Vercel project
+their token. Highlights are written back to Cortico. The hosted app (frontend at `/`, backend under `/api`) is the Vercel project
 `notes-in-the-margin-api`, with a Neon Postgres sidecar. See `docs/architecture/cortico.md`.
 
 To check the live pipes with your own Cortico account:
 
 ```sh
-cd backend && .venv/bin/python scripts/cortico_smoke.py --api <backend url> --org 353
+cd backend && .venv/bin/python scripts/cortico_smoke.py --api <app url>/api --org 353
 ```
 
 ## Tests

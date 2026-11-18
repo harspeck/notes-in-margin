@@ -46,6 +46,16 @@ columns.
     `(snippet_id, start, end)`, so quoting them needs words without a conversation in hand.
     Transcripts refresh after `cortico.snippet_cache_ttl_seconds`. Snippets that disappear
     upstream stay cached, so old evidence still quotes.
+  - `rl_cortico_guide` holds each project's latest conversation guide questions, for the
+    same lifetime. `ApiSource.guide_questions` (opening a conversation) reads and fills it,
+    so a guide is fetched at most once per project per lifetime, not on every open.
+- **Reads that never call Cortico per conversation.** `scope_conversations` returns the
+  conversations of the workspace's projects from the cached listing
+  (`rl_cortico_conversation`), and lists them from Cortico only when nothing is cached for
+  those projects yet. `guide_questions_for_projects` returns cached guides and fetches at
+  most a given number of uncached ones. Breadth, guide ideas and "what am I missing" use
+  these, so the Questions screen costs no Cortico call per conversation. The cached listing
+  is as fresh as the last `GET /conversations` for those projects.
 - **`app/auth.py`: sessions.**
   - `POST /auth/login` sends the user's email and password to Cortico once. Cortico has no
     OAuth flow for third-party apps. The password is never stored.
@@ -78,12 +88,21 @@ columns.
   - Deleting a local highlight deletes only the Cortico copy this app created. Title,
     notes and star stay local, because Cortico's highlight update takes only title and
     metadata.
+- **Reading Cortico's highlights (`services/cortico_highlights.py`).** `GET /v2/highlights`
+  with `conversation_ids` and `source=ALL` (the filter defaults to MOBILE upstream), tried
+  again without `source` if Cortico rejects the combination. The listing gives an audio
+  range per highlight and no word indices, so `spans_for` picks the words whose start time
+  falls in the range. Not yet checked against live Cortico: run `scripts/cortico_smoke.py`,
+  which prints the count.
 
 ## Not yet done
 
 - **Voice memo audio on Vercel.** The filesystem is read-only apart from `/tmp`, and
   faster-whisper isn't in the deployed requirements. Hosted voice memos need audio in
-  Vercel Blob and hosted transcription, for example OpenAI.
+  Vercel Blob and hosted transcription, for example OpenAI. Until then the hosted app
+  reflects by typing (`POST /conversations/{id}/reflections`), which needs neither.
+- **Project names on the desk.** `ApiSource.project_names` returns nothing, because project
+  names aren't cached in the sidecar, so `GET /desk` gives `project_name: null` when hosted.
 - **Gists in `cortico_api` mode.** `scripts/backfill_gists.py` still reads the snapshot.
   In API mode, next-step suggestions see only gists for conversations the user's
   workspace has listed.

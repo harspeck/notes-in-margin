@@ -21,7 +21,7 @@ from typing import Protocol
 from sqlalchemy.orm import Session
 
 from .client import CorticoClient
-from .errors import CorticoNotFound
+from .errors import CorticoNotFound, CorticoRejected
 
 
 @dataclass(frozen=True)
@@ -70,6 +70,12 @@ class CorticoSource(Protocol):
     def snippets(self, conversation_id: int) -> list[SnippetRef]: ...
     def snippets_by_ids(self, ids: set[int] | list[int]) -> dict[int, SnippetRef]: ...
     def guide_questions(self, conversation: ConversationRef) -> list[GuideQuestionRef]: ...
+    def project_names(self, ids: set[int] | list[int]) -> dict[int, str]: ...
+    def cortico_highlights(self, conversation_id: int) -> list[dict]: ...
+    def scope_conversations(self, project_ids: list[int] | None = None) -> list[ConversationRef]: ...
+    def guide_questions_for_projects(
+        self, project_ids: list[int], max_fetches: int | None = None
+    ) -> tuple[dict[int, list[GuideQuestionRef]], list[int]]: ...
 
 
 def as_source(obj) -> CorticoSource:
@@ -129,6 +135,29 @@ class SnapshotSource:
         if project_ids:
             q = q.filter(Conversation.project_id.in_(project_ids))
         return [self._conv(c) for c in q.order_by(Conversation.id).all()]
+
+    def scope_conversations(self, project_ids: list[int] | None = None) -> list[ConversationRef]:
+        return self.list_conversations(project_ids or None)
+
+    def guide_questions_for_projects(self, project_ids, max_fetches=None):
+        """Each project's latest guide. No snapshot conversation carries a guide id, so the
+        project's guide is the guide of every conversation in it."""
+        out = {
+            pid: self.guide_questions(ConversationRef(id=0, title="", project_id=pid))
+            for pid in dict.fromkeys(project_ids)
+        }
+        return out, []
+
+    def project_names(self, ids) -> dict[int, str]:
+        from ..models_cortico import Project
+
+        ids = set(ids)
+        if not ids:
+            return {}
+        return {p.id: p.name for p in self.db.query(Project).filter(Project.id.in_(ids))}
+
+    def cortico_highlights(self, conversation_id: int) -> list[dict]:
+        return []
 
     def _snippet_refs(self, rows) -> list[SnippetRef]:
         from ..models_cortico import Participant
@@ -282,7 +311,40 @@ class ApiSource:
             return {}
         return {r.id: self._ref(r) for r in self.db.query(RLCorticoConversation).filter(RLCorticoConversation.id.in_(ids))}
 
+    def scope_conversations(self, project_ids: list[int] | None = None) -> list[ConversationRef]:
+        """The conversations in these projects (default: the workspace's) from the sidecar's
+        cached listing, with no Cortico call. Only when nothing is cached for them yet does
+        it list them from Cortico, once."""
+        from ..models_prototype import RLCorticoConversation
+
+        project_ids = project_ids if project_ids is not None else self.workspace_project_ids
+        if not project_ids:
+            return []
+        rows = (
+            self.db.query(RLCorticoConversation)
+            .filter(RLCorticoConversation.project_id.in_(project_ids))
+            .all()
+        )
+        if not rows:
+            return self.list_conversations(project_ids)
+        rows.sort(key=lambda r: (r.start_time or "", r.id), reverse=True)
+        return [self._ref(r) for r in rows]
+
+    def project_names(self, ids) -> dict[int, str]:
+        # Project names aren't cached in the sidecar, and listing /v2/projects on every desk
+        # load would be a paginated upstream call. Callers show the id when a name is missing.
+        return {}
+
     # snippets
+
+    def cortico_highlights(self, conversation_id: int) -> list[dict]:
+        """Every highlight Cortico holds on the conversation, as Cortico returns it. Read
+        live each time: other tools add and remove highlights at any moment."""
+        try:
+            return self.client.highlights(conversation_id)
+        except CorticoRejected:
+            # Cortico refuses some filter combinations; the conversation filter alone is enough.
+            return self.client.highlights(conversation_id, source=None)
 
     @staticmethod
     def _snippet_ref(r) -> SnippetRef:
@@ -349,7 +411,54 @@ class ApiSource:
     def guide_questions(self, conversation: ConversationRef) -> list[GuideQuestionRef]:
         if conversation.project_id is None:
             return []
-        guides = self.client.conversation_guides(conversation.project_id)
+        return self._project_guide(conversation.project_id)
+
+    def _cached_guide(self, project_id: int) -> list[GuideQuestionRef] | None:
+        from ..models_prototype import RLCorticoGuide
+
+        row = self.db.get(RLCorticoGuide, project_id)
+        if row is None or _aware(row.fetched_at) <= _now() - self.snippet_ttl:
+            return None
+        return [GuideQuestionRef(**q) for q in json.loads(row.questions_json)]
+
+    def _project_guide(self, project_id: int) -> list[GuideQuestionRef]:
+        """The project's latest guide, through rl_cortico_guide (same lifetime as the
+        transcript cache). A failed fetch raises and is not cached."""
+        from ..models_prototype import RLCorticoGuide
+
+        cached = self._cached_guide(project_id)
+        if cached is not None:
+            return cached
+        out = self._fetch_guide(project_id)
+        row = self.db.get(RLCorticoGuide, project_id)
+        if row is None:
+            row = RLCorticoGuide(project_id=project_id)
+            self.db.add(row)
+        row.questions_json = json.dumps([q.__dict__ for q in out])
+        row.fetched_at = _now()
+        self.db.commit()
+        return out
+
+    def guide_questions_for_projects(self, project_ids, max_fetches=None):
+        """Guide questions per project. Cached projects cost nothing; at most `max_fetches`
+        uncached ones are fetched from Cortico (one paginated call each), and the rest come
+        back in the second value as not loaded."""
+        out: dict[int, list[GuideQuestionRef]] = {}
+        not_loaded: list[int] = []
+        fetched = 0
+        for pid in dict.fromkeys(project_ids):
+            cached = self._cached_guide(pid)
+            if cached is not None:
+                out[pid] = cached
+            elif max_fetches is not None and fetched >= max_fetches:
+                not_loaded.append(pid)
+            else:
+                fetched += 1
+                out[pid] = self._project_guide(pid)
+        return out, not_loaded
+
+    def _fetch_guide(self, project_id: int) -> list[GuideQuestionRef]:
+        guides = self.client.conversation_guides(project_id)
         if not guides:
             return []
         # Same rule as the snapshot: the project's latest guide version.

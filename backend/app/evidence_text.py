@@ -26,3 +26,19 @@ def quoted_texts(
             continue
         out[(sid, start, end)] = " ".join(w["word"] for w in snippet.words[start:end])
     return out
+
+
+def evidence_conversations(cortico_db, snippet_ids: set[int]) -> dict[int, tuple[int, str | None]]:
+    """snippet id -> (conversation id, conversation title). An insight's evidence can come
+    from several conversations (after an insight merge), so serializers label each evidence
+    row with its own conversation, not the reflection's. Unknown snippets are left out."""
+    snippet_ids = set(snippet_ids)
+    if not snippet_ids:
+        return {}
+    source = as_source(cortico_db)
+    conversation_of = {sid: s.conversation_id for sid, s in source.snippets_by_ids(snippet_ids).items()}
+    conversations = source.conversations_by_ids(set(conversation_of.values()))
+    return {
+        sid: (cid, conversations[cid].title if cid in conversations else None)
+        for sid, cid in conversation_of.items()
+    }

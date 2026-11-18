@@ -14,14 +14,20 @@ from .cortico.errors import CorticoError
 from .llm import AIProviderError
 from .db import PrototypeBase, PrototypeSession, prototype_engine
 from .routers import (
+    gists,
+    activity,
     auth,
     checkpoints,
     code_families,
     conversations,
+    desk,
     highlights,
+    listening_interests,
     memo,
+    merge_nudges,
     next_steps,
     organize,
+    question_levers,
     research_questions,
     review,
     settings,
@@ -86,10 +92,17 @@ app.include_router(research_questions.rq_merges_router, dependencies=signed_in)
 app.include_router(voice_memos.router, dependencies=signed_in)
 app.include_router(review.router, dependencies=signed_in)
 app.include_router(memo.router, dependencies=signed_in)
+app.include_router(memo.insight_merges_router, dependencies=signed_in)
 app.include_router(next_steps.router, dependencies=signed_in)
 app.include_router(code_families.router, dependencies=signed_in)
 app.include_router(organize.router, dependencies=signed_in)
 app.include_router(settings.router, dependencies=signed_in)
+app.include_router(desk.router, dependencies=signed_in)
+app.include_router(listening_interests.router, dependencies=signed_in)
+app.include_router(activity.router, dependencies=signed_in)
+app.include_router(merge_nudges.router, dependencies=signed_in)
+app.include_router(question_levers.router, dependencies=signed_in)
+app.include_router(gists.router, dependencies=signed_in)
 
 
 @app.get("/health")

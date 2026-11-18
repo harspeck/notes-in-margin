@@ -18,6 +18,7 @@ from ..schemas import (
     CodeFamilyUpdate,
     StarRequest,
 )
+from ..services import activity
 from ..services.code_families import (
     LIVE_FAMILY_STATUSES,
     _merge_target,
@@ -279,6 +280,12 @@ def star_family(
     family = owned_family(prototype_db, family_id, user)
     if body.starred and family.status not in LIVE_FAMILY_STATUSES:
         raise HTTPException(409, f"code family is {family.status}")
+    if body.starred and family.id not in starred_family_ids(prototype_db, [family.id]):
+        activity.log_activity(
+            prototype_db, user.id, "user", activity.CODE_FAMILY_STARRED,
+            f"You starred a code family: \u201c{activity.excerpt(family.name)}\u201d",
+            code_family_id=family.id, research_question_id=family.research_question_id,
+        )
     set_star(prototype_db, family, body.starred)
     prototype_db.commit()
     prototype_db.refresh(family)
@@ -322,6 +329,12 @@ def accept_family(
     family_id: int, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)
 ):
     family = owned_family(prototype_db, family_id, user)
+    if family.status != "accepted":
+        activity.log_activity(
+            prototype_db, user.id, "user", activity.CODE_FAMILY_ACCEPTED,
+            f"You accepted a code family: \u201c{activity.excerpt(family.name)}\u201d",
+            code_family_id=family.id, research_question_id=family.research_question_id,
+        )
     family.status = "accepted"
     prototype_db.commit()
     return {"id": family.id, "status": family.status}
@@ -332,6 +345,12 @@ def dismiss_family(
     family_id: int, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)
 ):
     family = owned_family(prototype_db, family_id, user)
+    if family.status != "dismissed":
+        activity.log_activity(
+            prototype_db, user.id, "user", activity.CODE_FAMILY_DISMISSED,
+            f"You dismissed a code family: \u201c{activity.excerpt(family.name)}\u201d",
+            code_family_id=family.id, research_question_id=family.research_question_id,
+        )
     family.status = "dismissed"
     prototype_db.commit()
     return {"id": family.id, "status": family.status}

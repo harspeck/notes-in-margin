@@ -23,6 +23,7 @@ from ..models_prototype import (
     CodeFamilyStar,
     ReflectionConnection,
 )
+from . import activity
 from .rq_merges import resolve_rq_id, rq_group_ids
 
 FILED_STATUSES = ("accepted", "edited")
@@ -445,4 +446,12 @@ def synthesize_code_families(
         if cap.near_cap
         else []
     )
+    new_count = sum(1 for f in touched if f.id not in existing_family_ids)
+    activity.log_activity(
+        prototype_db, user_id, "ai", activity.CODE_FAMILIES_SUGGESTED,
+        f"The AI suggested {activity.plural(new_count, 'code family', 'code families')}"
+        + (f" and {activity.plural(len(merges), 'merge')}." if merges else "."),
+        research_question_id=research_question_id, count=new_count, merge_count=len(merges),
+    )
+    prototype_db.commit()
     return SynthesisResult(families=touched, merge_suggestions=merges, withheld_new_families=withheld, cap=cap)

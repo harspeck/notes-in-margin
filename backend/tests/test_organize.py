@@ -188,7 +188,9 @@ def test_organize_entries_carry_the_same_evidence_as_the_memo():
     ev = entry["evidence"]
     assert [(e["highlight_id"], e["source"], e["starred"]) for e in ev] == [(cited, "user", True), (None, "ai", False)]
     assert all(e["text"] for e in ev)
-    assert set(ev[0]) == {"highlight_id", "snippet_id", "start_index", "end_index", "source", "starred", "text"}
+    assert set(ev[0]) == {"highlight_id", "snippet_id", "start_index", "end_index", "source", "starred", "text",
+                          "conversation_id", "conversation_title"}
+    assert all(e["conversation_id"] == 9 and e["conversation_title"] for e in ev)
 
     memo = client.get("/memo").json()
     (memo_entry,) = [e for s in memo["sections"] for e in s["entries"] if e["connection_id"] == c]

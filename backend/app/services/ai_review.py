@@ -21,6 +21,7 @@ from ..config import Config, get_config
 from ..evidence_provenance import highlight_spans, resolve_evidence
 from ..cortico.source import as_source
 from ..llm import structured_json
+from . import activity, listening_interests
 from ..models_prototype import (
     AppSetting,
     ConnectionEvidence,
@@ -260,6 +261,8 @@ def persist_review_result(
     starred-highlight guarantee lives in the review router: any starred highlight this
     linking doesn't attach to an RQ connection is returned as starred-unassigned.
     """
+    # Before the column is overwritten, so the one-time import still sees its old value.
+    listening_interests.add_from_reflection(prototype_db, voice_memo, result.get("extracted_interests", []))
     voice_memo.extracted_interests = json.dumps(result.get("extracted_interests", []))
     spans = highlight_spans(prototype_db, voice_memo.user_id, voice_memo.conversation_id)
     starred_ids = {s.highlight_id for s in spans if s.starred}
@@ -329,5 +332,12 @@ def persist_review_result(
             )
         created.append(connection)
 
+    activity.log_activity(
+        prototype_db, voice_memo.user_id, "ai", activity.INSIGHTS_SUGGESTED,
+        f"The AI suggested {activity.plural(len(created), 'insight')} for your reflection."
+        if created
+        else "The AI found no insights to suggest for your reflection.",
+        conversation_id=voice_memo.conversation_id, voice_memo_id=voice_memo.id, count=len(created),
+    )
     prototype_db.commit()
     return created

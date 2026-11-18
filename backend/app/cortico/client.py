@@ -193,6 +193,11 @@ class CorticoClient:
 
     # --- writes ---------------------------------------------------------------------------
 
+    def highlights(self, conversation_id: int, *, source: str | None = "ALL") -> list[dict]:
+        # Cortico's `source` filter defaults to MOBILE, which would leave out highlights on
+        # conversations recorded on the web.
+        return list(self.paginate("/v2/highlights", "highlights", conversation_ids=[conversation_id], source=source))
+
     def create_highlight(self, payload: dict) -> dict:
         return self.request("POST", "/v2/highlights", json=payload)
 

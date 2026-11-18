@@ -2,7 +2,7 @@
 
 Run it yourself; the password is read with getpass and goes only to the API you point at:
 
-    .venv/bin/python scripts/cortico_smoke.py --api https://<deployment>.vercel.app --org 353
+    .venv/bin/python scripts/cortico_smoke.py --api https://<deployment>.vercel.app/api --org 353
     .venv/bin/python scripts/cortico_smoke.py --api http://localhost:8000 --org 353 --write-highlight
 
 Steps: sign in, list organizations and projects, save a workspace from the first project
@@ -69,6 +69,9 @@ def main() -> None:
         conv = next((x for x in convs if x.get("duration_seconds")), convs[0])
         detail = step(f"transcript of {conv['id']}", c.get(f"/conversations/{conv['id']}"))
         print(f"    {len(detail['snippets'])} snippets, {len(detail['guide_questions'])} guide questions")
+
+        theirs = step("highlights already in Cortico", c.get(f"/conversations/{conv['id']}/cortico_highlights"))
+        print(f"    {len(theirs)} placed on the transcript")
 
         if a.write_highlight:
             snip = next((s for s in detail["snippets"] if len(s["words"]) >= 3), None)

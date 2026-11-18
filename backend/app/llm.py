@@ -37,14 +37,19 @@ class StructuredResult:
     output_tokens: int = 0
 
 
-def structured_json(*, system: str, user: str, schema: dict, name: str, effort: str | None = None) -> StructuredResult:
+def structured_json(
+    *, system: str, user: str, schema: dict, name: str, effort: str | None = None, model: str | None = None
+) -> StructuredResult:
+    """`model` and `effort` default to `config.ai_review`. A feature that runs on another
+    model passes the id from its own config block, never a literal."""
     cfg = get_config().ai_review
     effort = effort or cfg.reasoning_effort
+    model = model or cfg.model
     if cfg.provider == "anthropic":
-        return _anthropic(system=system, user=user, schema=schema, model=cfg.model, effort=effort,
+        return _anthropic(system=system, user=user, schema=schema, model=model, effort=effort,
                           max_tokens=cfg.max_output_tokens)
     if cfg.provider == "openai":
-        return _openai(system=system, user=user, schema=schema, name=name, model=cfg.model, effort=effort)
+        return _openai(system=system, user=user, schema=schema, name=name, model=model, effort=effort)
     raise AIProviderError(f"Unknown AI provider {cfg.provider!r} in config.ai_review.provider.", 500)
 
 
@@ -64,6 +69,13 @@ def anthropic_schema(schema: Any) -> Any:
         out.pop("type")
         out["anyOf"] = [{"type": t} for t in types]
     return out
+
+
+def _fallback_options(model: str) -> dict:
+    """Haiku has no server-side fallback: a declined request stays declined, so it is not asked for."""
+    if model.startswith("claude-haiku"):
+        return {}
+    return {"betas": [FALLBACK_BETA], "fallbacks": "default"}
 
 
 def _anthropic_client():
@@ -86,8 +98,7 @@ def _anthropic(*, system: str, user: str, schema: dict, model: str, effort: str,
                 "effort": effort,
                 "format": {"type": "json_schema", "schema": anthropic_schema(copy.deepcopy(schema))},
             },
-            betas=[FALLBACK_BETA],
-            fallbacks="default",
+            **_fallback_options(model),
         ) as stream:
             message = stream.get_final_message()
     except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as exc:
@@ -101,6 +112,11 @@ def _anthropic(*, system: str, user: str, schema: dict, model: str, effort: str,
     except anthropic.AnthropicError as exc:
         # Includes a missing ANTHROPIC_API_KEY, which surfaces when the client resolves credentials.
         raise AIProviderError(f"Couldn't call Claude: {exc}", 503) from exc
+    except TypeError as exc:
+        # An empty ANTHROPIC_API_KEY makes the SDK raise TypeError, not AnthropicError.
+        if "authentication" not in str(exc):
+            raise
+        raise AIProviderError("Claude isn't set up here. Check ANTHROPIC_API_KEY.", 503) from exc
 
     if message.stop_reason == "refusal":
         raise AIProviderError("Claude declined this request.", 422)
