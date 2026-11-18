@@ -146,7 +146,7 @@ export default function DeskPage() {
         setAsking(true);
         return api
           .recommendNext()
-          .then((r) => (r.recommendation ? api.listNextSteps().then(setNextSteps) : undefined))
+          .then((r) => (r.generated || r.recommendation ? api.listNextSteps().then(setNextSteps) : undefined))
           .finally(() => setAsking(false));
       })
       .catch(() => {});
@@ -217,24 +217,35 @@ export default function DeskPage() {
     setSummarising(true);
     setError(null);
     try {
+      let made = 0;
       for (;;) {
         const run = await api.generateGists();
         setGists(run);
+        made += run.generated.length;
         if (run.failed.length) {
           setError(run.failed[0].detail);
-          break;
+          return;
         }
         const done = run.generated.length + run.without_transcript.length;
         if (run.remaining === 0 || done === 0 || stopSummarising.current) break;
       }
+      // Leaving the Desk stops the loop; nothing is asked for on a page that is gone.
+      if (made === 0 || stopSummarising.current) return;
       const r = await api.recommendNext();
-      if (r.recommendation) setNextSteps(await api.listNextSteps());
+      if (r.generated || r.recommendation) setNextSteps(await api.listNextSteps());
     } catch (e) {
       setError(errorText(e));
     } finally {
       setSummarising(false);
     }
   }
+
+  useEffect(
+    () => () => {
+      stopSummarising.current = true;
+    },
+    []
+  );
 
   async function openSuggestion(s: NextStepSuggestion) {
     await api.acceptNextStep(s.id).catch(() => {});

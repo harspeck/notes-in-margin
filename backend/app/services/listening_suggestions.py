@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from ..config import Config
 from ..cortico.source import CorticoSource
-from ..llm import structured_json
+from ..llm import AIProviderError, structured_json
 from ..models_prototype import (
     ListeningInterest, ListeningSuggestion, ListeningSuggestionRun, ResearchQuestion, RLHighlight,
 )
@@ -54,6 +54,9 @@ OUTPUT_SCHEMA = {
     "required": ["suggestions"],
     "additionalProperties": False,
 }
+
+
+FAILED = "failed"  # the fingerprint of a run whose model call did not finish
 
 
 def _norm(text: str) -> str:
@@ -179,13 +182,21 @@ def refresh(db: Session, source: CorticoSource, user_id: int, config: Config) ->
         ],
         "offer_at_most": cfg.max_suggestions,
     }
-    answer = structured_json(
-        system=PROMPT, user=json.dumps(payload), schema=OUTPUT_SCHEMA, name="listening_suggestions",
-        model=cfg.model, effort=cfg.reasoning_effort,
-    )
+    # The run is saved before the model is asked, so a second request arriving meanwhile
+    # (another tab) finds it and does not ask again.
     run = ListeningSuggestionRun(user_id=user_id, fingerprint=key)
     db.add(run)
-    db.flush()
+    db.commit()
+    try:
+        answer = structured_json(
+            system=PROMPT, user=json.dumps(payload), schema=OUTPUT_SCHEMA, name="listening_suggestions",
+            model=cfg.model, effort=cfg.reasoning_effort,
+        )
+    except AIProviderError:
+        # Kept, so the next try waits out `min_minutes_between_runs`; marked, so it is a retry.
+        run.fingerprint = FAILED
+        db.commit()
+        raise
     created = apply_suggestions(
         db, user_id, run, answer.data.get("suggestions"), limit=cfg.max_suggestions,
         ai_metadata={"model": answer.model, "reasoning_effort": answer.reasoning_effort, "prompt": PROMPT},

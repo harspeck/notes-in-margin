@@ -49,7 +49,8 @@ def structured_json(
         return _anthropic(system=system, user=user, schema=schema, model=model, effort=effort,
                           max_tokens=cfg.max_output_tokens)
     if cfg.provider == "openai":
-        return _openai(system=system, user=user, schema=schema, name=name, model=model, effort=effort)
+        # A Claude model id from a feature's config block means nothing to OpenAI.
+        return _openai(system=system, user=user, schema=schema, name=name, model=cfg.model, effort=effort)
     raise AIProviderError(f"Unknown AI provider {cfg.provider!r} in config.ai_review.provider.", 500)
 
 

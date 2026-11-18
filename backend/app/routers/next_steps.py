@@ -5,7 +5,7 @@ import json
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from ..auth import CurrentUser, current_user, get_source
+from ..auth import CurrentUser, active_workspace, current_user, get_source, workspace_project_ids
 from ..config import get_config
 from ..cortico.source import CorticoSource, as_source
 from ..db import get_prototype_db
@@ -41,6 +41,15 @@ def _titles_for(cortico_db: Session, suggestions: list[NextStepSuggestion]) -> d
     return {cid: c.title for cid, c in as_source(cortico_db).conversations_by_ids(conv_ids).items()}
 
 
+def _scope_ids(prototype_db: Session, source: CorticoSource, user: CurrentUser) -> set[int] | None:
+    """The conversations the user's workspace holds: what the model may be shown and may
+    recommend. None in snapshot mode, where everyone reads the same corpus."""
+    if config.data_source != "cortico_api":
+        return None
+    project_ids = workspace_project_ids(active_workspace(prototype_db, user))
+    return {c.id for c in source.scope_conversations(project_ids)} if project_ids else set()
+
+
 def _what(s: NextStepSuggestion) -> str:
     return f" \u201c{activity.excerpt(s.suggested_direction)}\u201d" if s.suggested_direction else ""
 
@@ -51,7 +60,8 @@ def generate(
     user: CurrentUser = Depends(current_user),
 ):
     created = generate_next_step_suggestions(
-        prototype_db=prototype_db, cortico_db=cortico_db, config=config, user_id=user.id
+        prototype_db=prototype_db, cortico_db=cortico_db, config=config, user_id=user.id,
+        scope_ids=_scope_ids(prototype_db, cortico_db, user),
     )
     titles = _titles_for(cortico_db, created)
     return [_serialize(s, titles) for s in created]
@@ -64,7 +74,10 @@ def recommend(
 ):
     """The conversation to read next. Paid only when nothing is already suggested; see
     `recommend_next`."""
-    result = recommend_next(prototype_db=prototype_db, cortico_db=cortico_db, config=config, user_id=user.id)
+    result = recommend_next(
+        prototype_db=prototype_db, cortico_db=cortico_db, config=config, user_id=user.id,
+        scope_ids=_scope_ids(prototype_db, cortico_db, user),
+    )
     s = result["recommendation"]
     return {**result, "recommendation": _serialize(s, _titles_for(cortico_db, [s])) if s else None}
 

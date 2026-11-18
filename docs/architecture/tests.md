@@ -1,6 +1,6 @@
 # Tests
 
-Run them with `cd backend && OPENAI_API_KEY=sk-fake .venv/bin/python -m pytest -q` (184 tests, about 4.5 s). They
+Run them with `cd backend && OPENAI_API_KEY=sk-fake .venv/bin/python -m pytest -q` (188 tests, about 4.5 s). They
 need no network, API key or running server.
 
 ## Environment (`backend/tests/conftest.py`)

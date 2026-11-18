@@ -35,7 +35,10 @@ export default function Player({ ref, src, durationSeconds, onTime, onEnded, onE
   const duration = durationSeconds ?? fileDuration ?? 0;
 
   function play() {
-    audioRef.current?.play().catch(() => onError(PLAY_FAILED));
+    // Pausing while the audio is still loading rejects the play with AbortError: not a failure.
+    audioRef.current?.play().catch((e) => {
+      if ((e as { name?: string } | null)?.name !== "AbortError") onError(PLAY_FAILED);
+    });
   }
 
   function moveTo(seconds: number) {

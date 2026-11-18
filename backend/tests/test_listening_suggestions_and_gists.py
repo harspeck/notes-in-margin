@@ -209,3 +209,55 @@ def test_a_conversation_is_recommended_after_a_session_and_then_served_from_what
     client.put(f"/conversations/{target}/reading_position", json={})
     assert client.post("/next_steps/recommend").json() == {"recommendation": None, "generated": False, "reason": "recent"}
     assert len(fake.calls) == 1
+
+
+def test_a_failed_call_is_remembered_so_the_page_does_not_pay_for_it_on_every_load(user_id, monkeypatch):
+    from app.llm import AIProviderError
+
+    calls = []
+
+    def declines(**kwargs):
+        calls.append(kwargs)
+        raise AIProviderError("Claude declined this request.", 422)
+
+    monkeypatch.setattr(listening_suggestions, "structured_json", declines)
+    client.post("/research_questions", json={"name": "Who is missing?"})
+    assert client.post("/listening_interests/suggestions/refresh").status_code == 422
+    assert _refresh()["reason"] == "recent" and len(calls) == 1
+    # After the wait it is tried again: a failure is not treated as an answer.
+    monkeypatch.setattr(get_config().listening_suggestions, "min_minutes_between_runs", 0)
+    assert client.post("/listening_interests/suggestions/refresh").status_code == 422
+    assert len(calls) == 2
+
+
+def test_a_declined_conversation_is_skipped_and_does_not_hold_up_the_rest(user_id, no_gists, monkeypatch):
+    from app.llm import AIProviderError
+
+    monkeypatch.setattr(get_config().gists, "max_per_request", 2)
+    calls = []
+
+    def declines_first(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise AIProviderError("Claude declined this request.", 422)
+        return StructuredResult(data={"summary": "s", "keywords": []}, provider="anthropic", model="m", reasoning_effort="low")
+
+    monkeypatch.setattr(gists, "structured_json", declines_first)
+    first = client.post("/gists/generate").json()
+    assert len(first["without_transcript"]) == 1 and len(first["generated"]) == 1 and first["failed"] == []
+    second = client.post("/gists/generate").json()
+    assert not set(second["generated"]) & (set(first["generated"]) | set(first["without_transcript"]))
+
+
+def test_the_same_inputs_are_not_sent_for_a_recommendation_twice(user_id, no_gists, monkeypatch):
+    target = client.get("/conversations").json()[0]["id"]
+    fake = FakeModel(monkeypatch, next_steps, {"suggestions": [
+        {"research_question_id": None, "suggested_direction": "Only a direction", "recommended_conversation_id": None, "rationale": "r"}]})
+    with PrototypeSession() as db:
+        db.add(ConversationGist(conversation_id=target, project_id=1, summary_text="summary", keywords_json="[]"))
+        db.commit()
+    assert client.post("/next_steps/recommend").json() == {"recommendation": None, "generated": True, "reason": None}
+    assert client.post("/next_steps/recommend").json()["reason"] == "recent"
+    monkeypatch.setattr(get_config().next_steps, "min_minutes_between_auto_runs", 0)
+    assert client.post("/next_steps/recommend").json()["reason"] == "unchanged"
+    assert len(fake.calls) == 1

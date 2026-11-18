@@ -5,6 +5,7 @@ nothing is "decided" until the user accepts or dismisses.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -12,9 +13,9 @@ from sqlalchemy.orm import Session
 
 from ..config import Config
 from ..cortico.source import as_source
-from ..llm import structured_json
+from ..llm import AIProviderError, structured_json
 from . import activity, listening_interests
-from ..models_prototype import Activity, ConversationGist, NextStepSuggestion, ReadingState, ResearchQuestion, RLHighlight, TranscriptState, VoiceMemo
+from ..models_prototype import ConversationGist, NextStepSuggestion, ReadingState, RecommendationRun, ResearchQuestion, RLHighlight, TranscriptState, VoiceMemo
 
 NEXT_STEPS_PROMPT = """You help a sensemaker decide what to listen to next in a large interview \
 corpus, based on things they've said they want to hear more about.
@@ -112,10 +113,18 @@ def _existing_suggestions_context(prototype_db: Session, user_id: int) -> list[d
     ]
 
 
-def _gist_context(prototype_db: Session, cortico_db: Session) -> list[dict]:
+def _gist_context(prototype_db: Session, cortico_db: Session, scope_ids: set[int] | None = None) -> list[dict]:
+    """`scope_ids` are the conversations of the user's workspace. Gists and the Cortico
+    conversation cache are shared by every user, so in `cortico_api` mode a caller must pass
+    it, or one user's summaries reach another user's prompt."""
     source = as_source(cortico_db)
     # An empty summary marks a conversation that had no transcript to summarise.
-    gists = prototype_db.query(ConversationGist).filter(ConversationGist.summary_text != "").all()
+    query = prototype_db.query(ConversationGist).filter(ConversationGist.summary_text != "")
+    if scope_ids is not None:
+        if not scope_ids:
+            return []
+        query = query.filter(ConversationGist.conversation_id.in_(scope_ids))
+    gists = query.all()
     known = source.conversations_by_ids({g.conversation_id for g in gists})
     if source.kind != "snapshot":
         # Only conversations this user's Cortico access has listed; never other users' corpora.
@@ -144,8 +153,11 @@ def gists_by_conversation(prototype_db: Session, conversation_ids: set[int]) -> 
     return {g.conversation_id: g for g in rows}
 
 
-def pending_recommendation(prototype_db: Session, user_id: int) -> NextStepSuggestion | None:
-    """The newest undecided suggestion that names a conversation the user has not opened."""
+def pending_recommendation(
+    prototype_db: Session, user_id: int, scope_ids: set[int] | None = None
+) -> NextStepSuggestion | None:
+    """The newest undecided suggestion that names a conversation the user has not opened
+    and, when `scope_ids` is given, can still read."""
     engaged = _engaged_conversation_ids(prototype_db, user_id)
     rows = (
         prototype_db.query(NextStepSuggestion)
@@ -156,32 +168,70 @@ def pending_recommendation(prototype_db: Session, user_id: int) -> NextStepSugge
         )
         .order_by(NextStepSuggestion.created_at.desc(), NextStepSuggestion.id.desc())
     )
-    return next((r for r in rows if r.recommended_conversation_id not in engaged), None)
+    return next(
+        (
+            r
+            for r in rows
+            if r.recommended_conversation_id not in engaged
+            and (scope_ids is None or r.recommended_conversation_id in scope_ids)
+        ),
+        None,
+    )
 
 
-def recommend_next(*, prototype_db: Session, cortico_db: Session, config: Config, user_id: int) -> dict:
+RUN_FAILED = "failed"
+
+
+def recommend_next(
+    *, prototype_db: Session, cortico_db: Session, config: Config, user_id: int, scope_ids: set[int] | None = None
+) -> dict:
     """The conversation to read next, for the moment a session ends. Answers from what is
     already suggested when it can. It calls the model only when nothing is waiting, there
-    are summaries of unopened conversations to choose from, and the last run is not recent.
-    `reason` says why no call was made."""
-    waiting = pending_recommendation(prototype_db, user_id)
+    are summaries of unopened conversations to choose from, the last run is not recent, and
+    what the model would be shown has changed since that run. `reason` says why no call
+    was made."""
+    waiting = pending_recommendation(prototype_db, user_id, scope_ids)
     if waiting is not None:
         return {"recommendation": waiting, "generated": False, "reason": None}
     engaged = _engaged_conversation_ids(prototype_db, user_id)
-    if not any(g["conversation_id"] not in engaged for g in _gist_context(prototype_db, cortico_db)):
+    candidates = sorted(
+        g["conversation_id"] for g in _gist_context(prototype_db, cortico_db, scope_ids) if g["conversation_id"] not in engaged
+    )
+    if not candidates:
         return {"recommendation": None, "generated": False, "reason": "no_summaries"}
+    key = hashlib.sha256(
+        json.dumps([candidates, _all_extracted_interests(prototype_db, user_id)]).encode()
+    ).hexdigest()
     last = (
-        prototype_db.query(Activity.created_at)
-        .filter(Activity.user_id == user_id, Activity.kind == activity.NEXT_STEPS_SUGGESTED)
-        .order_by(Activity.id.desc())
+        prototype_db.query(RecommendationRun)
+        .filter(RecommendationRun.user_id == user_id)
+        .order_by(RecommendationRun.id.desc())
         .first()
     )
     if last is not None:
-        made = last[0] if last[0].tzinfo else last[0].replace(tzinfo=timezone.utc)
+        made = last.created_at if last.created_at.tzinfo else last.created_at.replace(tzinfo=timezone.utc)
         if datetime.now(timezone.utc) - made < timedelta(minutes=config.next_steps.min_minutes_between_auto_runs):
             return {"recommendation": None, "generated": False, "reason": "recent"}
-    generate_next_step_suggestions(prototype_db=prototype_db, cortico_db=cortico_db, config=config, user_id=user_id)
-    return {"recommendation": pending_recommendation(prototype_db, user_id), "generated": True, "reason": None}
+        if last.fingerprint == key:
+            # The model saw exactly this and named nothing the user can open.
+            return {"recommendation": None, "generated": False, "reason": "unchanged"}
+    # Saved before the model is asked, so a second request arriving meanwhile does not ask too.
+    run = RecommendationRun(user_id=user_id, fingerprint=key)
+    prototype_db.add(run)
+    prototype_db.commit()
+    try:
+        generate_next_step_suggestions(
+            prototype_db=prototype_db, cortico_db=cortico_db, config=config, user_id=user_id, scope_ids=scope_ids
+        )
+    except AIProviderError:
+        run.fingerprint = RUN_FAILED
+        prototype_db.commit()
+        raise
+    return {
+        "recommendation": pending_recommendation(prototype_db, user_id, scope_ids),
+        "generated": True,
+        "reason": None,
+    }
 
 
 def _valid_conversation_ids(cortico_db: Session, candidate_ids: set[int]) -> set[int]:
@@ -199,6 +249,7 @@ def generate_next_step_suggestions(
     cortico_db: Session,
     config: Config,
     user_id: int,
+    scope_ids: set[int] | None = None,
 ) -> list[NextStepSuggestion]:
     research_questions = (
         prototype_db.query(ResearchQuestion)
@@ -213,7 +264,7 @@ def generate_next_step_suggestions(
         "research_questions": [{"id": rq.id, "name": rq.name, "description": rq.description} for rq in research_questions],
         "already_engaged_conversation_ids": sorted(_engaged_conversation_ids(prototype_db, user_id)),
         "existing_suggestions": _existing_suggestions_context(prototype_db, user_id),
-        "conversation_gists": _gist_context(prototype_db, cortico_db),
+        "conversation_gists": _gist_context(prototype_db, cortico_db, scope_ids),
     }
 
     answer = structured_json(
@@ -226,6 +277,8 @@ def generate_next_step_suggestions(
         s["recommended_conversation_id"] for s in raw_suggestions if s.get("recommended_conversation_id") is not None
     }
     valid_conversation_ids = _valid_conversation_ids(cortico_db, candidate_conversation_ids)
+    if scope_ids is not None:
+        valid_conversation_ids &= scope_ids  # the conversation cache is shared by every user
 
     created: list[NextStepSuggestion] = []
     for s in raw_suggestions:

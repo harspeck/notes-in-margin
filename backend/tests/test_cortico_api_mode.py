@@ -30,7 +30,7 @@ def _words(ws):
 class FakeCortico:
     def __init__(self):
         # pw-c: the desk test's own user. pw-d, pw-e: the questions-screen tests' own users.
-        self.users = {"pw-a": 9001, "pw-b": 9002, "pw-c": 9003, "pw-d": 9004, "pw-e": 9005}
+        self.users = {"pw-a": 9001, "pw-b": 9002, "pw-c": 9003, "pw-d": 9004, "pw-e": 9005, "pw-f": 9006}
         self.access = {}  # access token -> user id
         self.refresh = {}  # refresh token -> user id
         self.counter = 0
@@ -570,3 +570,42 @@ def test_questions_screen_when_hosted_is_scoped_to_the_workspace_and_writes_back
     _workspace(other)
     assert other.get(f"/research_questions/{rq}/highlights").status_code == 404
     assert other.post(f"/question_gaps/{gaps[0]['id']}/listen_next").status_code == 404
+
+
+def test_recommendations_never_draw_on_conversations_outside_the_users_workspace(fake, monkeypatch):
+    """Gists and the conversation cache are shared by every user, so the workspace is the
+    only thing keeping one user's summaries out of another user's prompt."""
+    from app.db import PrototypeSession
+    from app.llm import StructuredResult
+    from app.models_prototype import ConversationGist
+    from app.services import next_steps
+
+    wide = _login()  # another user lists both projects, which puts 7002 in the shared cache
+    _workspace(wide)
+    wide.get("/conversations")
+    client = _login("pw-f")
+    _workspace(client, project_ids=(501,))  # conversation 7001 only
+    client.get("/conversations")
+    sent = []
+
+    def model(*, system, user, schema, name, effort=None, model=None):
+        sent.append(json.loads(user))
+        return StructuredResult(provider="anthropic", model="m", reasoning_effort="low", data={"suggestions": [
+            {"research_question_id": None, "suggested_direction": None, "recommended_conversation_id": 7002, "rationale": "leak"},
+            {"research_question_id": None, "suggested_direction": None, "recommended_conversation_id": 7001, "rationale": "fine"},
+        ]})
+
+    monkeypatch.setattr(next_steps, "structured_json", model)
+    with PrototypeSession() as db:
+        for cid, pid in ((7001, 501), (7002, 502)):
+            db.merge(ConversationGist(conversation_id=cid, project_id=pid, summary_text=f"summary of {cid}", keywords_json="[]"))
+        db.commit()
+    try:
+        out = client.post("/next_steps/recommend").json()
+        assert [g["conversation_id"] for g in sent[0]["conversation_gists"]] == [7001]
+        assert out["recommendation"]["recommended_conversation_id"] == 7001
+        assert {s["recommended_conversation_id"] for s in client.get("/next_steps").json()} == {7001}
+    finally:
+        with PrototypeSession() as db:
+            db.query(ConversationGist).filter(ConversationGist.conversation_id.in_([7001, 7002])).delete(synchronize_session=False)
+            db.commit()

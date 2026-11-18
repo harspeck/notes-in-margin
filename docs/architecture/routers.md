@@ -62,7 +62,7 @@ mode every route below the `auth` rows answers 401 without a session.
 | | `POST /memo/connections/{connection_id}/restore` | `restore_connection` (retracted: back to its earlier filed status, revision first; rejected: back to `suggested`, not into the memo; 409 if not set aside) |
 | | `PUT /memo/reorder` | `reorder_memo_entries` (accepts entries from the RQ's merged group) |
 | next_steps | `POST /next_steps/generate` | `generate` (**paid**) |
-| | `POST /next_steps/recommend` | `recommend` (the conversation to read next, for the end of a session: `{recommendation, generated, reason}`. Answers from an undecided suggestion that names an unopened conversation; otherwise **paid**, unless there is no gist to choose from (`reason: "no_summaries"`) or the model was asked within `next_steps.min_minutes_between_auto_runs` (`"recent"`)) |
+| | `POST /next_steps/recommend` | `recommend` (the conversation to read next, for the end of a session: `{recommendation, generated, reason}`. Answers from an undecided suggestion that names an unopened conversation; otherwise **paid**, unless there is no gist to choose from (`reason: "no_summaries"`) the model was asked within `next_steps.min_minutes_between_auto_runs` (`"recent"`), or what it would be shown has not changed since it last named nothing (`"unchanged"`). Hosted, the gists shown and the conversation recommended are limited to the user's workspace) |
 | | `GET /next_steps?include_dismissed=` | `list_suggestions` |
 | | `POST /next_steps/{suggestion_id}/accept` | `accept` |
 | | `POST /next_steps/{suggestion_id}/dismiss` | `dismiss` |

@@ -458,6 +458,18 @@ class ListeningSuggestionRun(PrototypeBase):
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
 
 
+class RecommendationRun(PrototypeBase):
+    """One time `POST /next_steps/recommend` went to the model. Written before the call, so
+    a second request arriving meanwhile sees it. `fingerprint` is what the model was shown,
+    or "failed" when the call did not finish."""
+
+    __tablename__ = "rl_recommendation_run"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    fingerprint = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
 class SetAside(PrototypeBase):
     """One row each time a connection leaves the user's working set: retracted from the memo
     or rejected at review. It holds the status the connection had before, which is what

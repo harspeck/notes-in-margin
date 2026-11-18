@@ -285,7 +285,7 @@ export interface NextStepSuggestion {
 export interface NextRecommendation {
   recommendation: NextStepSuggestion | null;
   generated: boolean;
-  reason: "no_summaries" | "recent" | null;
+  reason: "no_summaries" | "recent" | "unchanged" | null;
 }
 
 /** A "what you want to hear next" line the AI offered and the user has not decided on. */

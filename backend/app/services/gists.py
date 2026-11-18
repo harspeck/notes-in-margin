@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import json
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import Config
+from ..cortico.errors import CorticoError, CorticoForbidden, CorticoNotFound
 from ..cortico.source import ConversationRef, CorticoSource, SnippetRef
 from ..llm import AIProviderError, structured_json
 from ..models_prototype import ConversationGist
@@ -50,42 +52,66 @@ def sample(snippets: list[SnippetRef], limit: int) -> list[SnippetRef]:
     return [spoken[int(i * step)] for i in range(limit)]
 
 
+def _countable(conversations: list[ConversationRef]) -> set[int]:
+    # A gist row needs a project, so a conversation without one can never get a gist.
+    return {c.id for c in conversations if c.project_id is not None}
+
+
+def _have(db: Session, ids: set[int]) -> set[int]:
+    if not ids:
+        return set()
+    return {r.conversation_id for r in db.query(ConversationGist.conversation_id).filter(ConversationGist.conversation_id.in_(ids))}
+
+
 def status(db: Session, conversations: list[ConversationRef]) -> dict:
-    ids = {c.id for c in conversations}
-    have = (
-        {r.conversation_id for r in db.query(ConversationGist.conversation_id).filter(ConversationGist.conversation_id.in_(ids))}
-        if ids
-        else set()
-    )
+    ids = _countable(conversations)
+    have = _have(db, ids)
     return {"total": len(ids), "with_gist": len(have), "remaining": len(ids - have)}
+
+
+def _save(db: Session, conversation: ConversationRef, summary: str, keywords: list[str]) -> bool:
+    """False when another request saved this conversation's gist first."""
+    db.add(ConversationGist(
+        conversation_id=conversation.id, project_id=conversation.project_id, forum_id=conversation.forum_id,
+        summary_text=summary, keywords_json=json.dumps(keywords),
+    ))
+    try:
+        db.commit()
+        return True
+    except IntegrityError:
+        db.rollback()
+        return False
 
 
 def generate_missing(
     db: Session, source: CorticoSource, conversations: list[ConversationRef], user_id: int, config: Config
 ) -> dict:
     """Summarises up to `config.gists.max_per_request` conversations that have no gist yet,
-    one model call each, committing after each so a failure keeps the ones before it. A
-    conversation with no transcript text is skipped and counted, never retried in this call."""
+    one model call each, saving after each. A conversation that can never be summarised (no
+    transcript text, gone from Cortico, or declined by the model) gets an empty gist row, so
+    it is not paid for again and does not hold up the ones after it. Any other failure
+    stops the batch, because the next call would most likely fail the same way."""
     cfg = config.gists
-    ids = [c.id for c in conversations]
-    have = (
-        {r.conversation_id for r in db.query(ConversationGist.conversation_id).filter(ConversationGist.conversation_id.in_(ids))}
-        if ids
-        else set()
-    )
+    have = _have(db, _countable(conversations))
     todo = [c for c in sorted(conversations, key=lambda c: c.id) if c.id not in have and c.project_id is not None]
-    names = source.project_names({c.project_id for c in todo[: cfg.max_per_request]})
+    batch = todo[: cfg.max_per_request]
+    names = source.project_names({c.project_id for c in batch})
     generated: list[int] = []
-    empty: list[int] = []
+    skipped: list[int] = []
     failed: list[dict] = []
-    for conversation in todo[: cfg.max_per_request]:
-        snippets = sample(source.snippets(conversation.id), cfg.sample_snippets)
+    for conversation in batch:
+        if db.get(ConversationGist, conversation.id) is not None:
+            continue  # another request got here first
+        try:
+            snippets = sample(source.snippets(conversation.id), cfg.sample_snippets)
+        except (CorticoNotFound, CorticoForbidden):
+            snippets = []
+        except CorticoError as exc:
+            failed.append({"conversation_id": conversation.id, "detail": exc.detail})
+            break
         if not snippets:
-            # An empty gist row, so the conversation is not fetched again on every call.
-            db.add(ConversationGist(conversation_id=conversation.id, project_id=conversation.project_id,
-                                    forum_id=conversation.forum_id, summary_text="", keywords_json="[]"))
-            db.commit()
-            empty.append(conversation.id)
+            if _save(db, conversation, "", []):
+                skipped.append(conversation.id)
             continue
         payload = {
             "title": conversation.title,
@@ -98,15 +124,15 @@ def generate_missing(
                 model=cfg.model, effort=cfg.reasoning_effort,
             )
         except AIProviderError as exc:
+            if exc.status_code == 422:  # declined: asking again would be paid for and declined again
+                if _save(db, conversation, "", []):
+                    skipped.append(conversation.id)
+                continue
             failed.append({"conversation_id": conversation.id, "detail": exc.detail})
-            break  # the next call would most likely fail the same way
+            break
         keywords = [str(k) for k in answer.data.get("keywords") or [] if isinstance(k, (str, int, float))]
-        db.add(ConversationGist(
-            conversation_id=conversation.id, project_id=conversation.project_id, forum_id=conversation.forum_id,
-            summary_text=str(answer.data.get("summary") or ""), keywords_json=json.dumps(keywords),
-        ))
-        db.commit()
-        generated.append(conversation.id)
+        if _save(db, conversation, str(answer.data.get("summary") or ""), keywords):
+            generated.append(conversation.id)
     if generated:
         activity.log_activity(
             db, user_id, "ai", activity.GISTS_GENERATED,
@@ -114,4 +140,4 @@ def generate_missing(
             count=len(generated),
         )
         db.commit()
-    return {**status(db, conversations), "generated": generated, "without_transcript": empty, "failed": failed}
+    return {**status(db, conversations), "generated": generated, "without_transcript": skipped, "failed": failed}
