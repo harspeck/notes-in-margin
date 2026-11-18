@@ -8,7 +8,7 @@ from ..config import get_config
 from ..cortico.source import CorticoSource
 from ..cortico.write_back import delete_highlight_copy, detach_deleted_highlight, push_highlight, sync_status
 from ..db import get_prototype_db
-from ..models_prototype import RLHighlight
+from ..models_prototype import ConnectionEvidence, RLHighlight
 from ..schemas import HighlightCreate, HighlightQuestionsUpdate, HighlightUpdate
 from ..services import activity, cortico_highlights, questions
 from ..services.highlights import create_highlight_for_user
@@ -163,6 +163,12 @@ def delete_highlight(
     user: CurrentUser = Depends(current_user),
 ):
     highlight = _owned_highlight(prototype_db, highlight_id, user)
+    # Evidence that cited the highlight keeps its passage and loses the link, before anything
+    # is deleted in Cortico: a local delete that failed after it would lose the Cortico copy.
+    prototype_db.query(ConnectionEvidence).filter(ConnectionEvidence.highlight_id == highlight.id).update(
+        {ConnectionEvidence.highlight_id: None}, synchronize_session=False
+    )
+    prototype_db.flush()
     sync = None
     if source.kind == "cortico_api":
         row = delete_highlight_copy(prototype_db, source, highlight.id)

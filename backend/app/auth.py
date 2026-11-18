@@ -128,7 +128,15 @@ def refresh_session(db: Session, token_hash: str) -> str:
     """Single-flight refresh. Cortico rotates refresh tokens and revokes the old one, so two
     requests refreshing at once would log the user out. The row lock (FOR UPDATE on Postgres;
     SQLite serializes writers anyway) makes the second request reuse the first one's result."""
-    row = db.query(RLSession).filter(RLSession.token_hash == token_hash).with_for_update().one_or_none()
+    # populate_existing: the request already loaded this row, and without it the values read
+    # before waiting on the lock would be kept, so the old refresh token would be sent again.
+    row = (
+        db.query(RLSession)
+        .filter(RLSession.token_hash == token_hash)
+        .populate_existing()
+        .with_for_update()
+        .one_or_none()
+    )
     if row is None:
         raise CorticoAuthError()
     if _aware(row.access_expires_at) > _now() + REFRESH_MARGIN:

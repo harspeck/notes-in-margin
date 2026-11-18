@@ -267,6 +267,12 @@ def persist_review_result(
     spans = highlight_spans(prototype_db, voice_memo.user_id, voice_memo.conversation_id)
     starred_ids = {s.highlight_id for s in spans if s.starred}
 
+    own_question_ids = {
+        r.id
+        for r in prototype_db.query(ResearchQuestion.id).filter(
+            ResearchQuestion.user_id == voice_memo.user_id, ResearchQuestion.archived.is_(False)
+        )
+    }
     created: list[ReflectionConnection] = []
     for conn in result.get("connections", []):
         valid_evidence = []
@@ -288,7 +294,10 @@ def persist_review_result(
 
         connection = ReflectionConnection(
             voice_memo_id=voice_memo.id,
-            research_question_id=conn.get("research_question_id"),
+            # An id the model invented, or another user's, becomes "doesn't fit a question".
+            research_question_id=(
+                conn.get("research_question_id") if conn.get("research_question_id") in own_question_ids else None
+            ),
             insight_text=conn["insight_text"],
             source="ai",
             status="suggested",

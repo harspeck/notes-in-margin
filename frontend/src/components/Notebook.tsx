@@ -342,11 +342,19 @@ function Recorder({ conversationId, maxDurationSeconds, onReviewReady, onSaved, 
     // background, so this polls for progress.
     setPhase("transcribing");
     setProgress(memo.transcription_progress);
+    // One request at a time, and nothing after the answer that ended the poll: two overlapping
+    // answers would each start the paid review.
+    let asking = false;
+    let settled = false;
     pollRef.current = setInterval(async () => {
+      if (asking || settled) return;
+      asking = true;
       const latest = await api.getVoiceMemo(memo.id).catch(() => null);
-      if (!latest || !aliveRef.current) return;
+      asking = false;
+      if (!latest || !aliveRef.current || settled) return;
       setProgress(latest.transcription_progress);
       if (latest.status === "ready_for_review" || latest.status === "failed") {
+        settled = true;
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = null;
       }

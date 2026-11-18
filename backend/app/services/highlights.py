@@ -26,6 +26,13 @@ def create_highlight_for_user(
     if conversation.project_id is None:
         raise HTTPException(409, "This conversation isn't in one of your workspace's projects.")
 
+    # Snippet text is served from a cache shared by every user, so a snippet from another
+    # conversation would hand back a transcript this user may not be able to open.
+    in_conversation = {s.id for s in source.snippets(conversation_id)}
+    foreign = sorted({s.snippet_id for s in body.snippets} - in_conversation)
+    if foreign:
+        raise HTTPException(400, f"snippets {foreign} aren't in this conversation's transcript")
+
     highlight = RLHighlight(
         user_id=user_id,
         conversation_id=conversation_id,

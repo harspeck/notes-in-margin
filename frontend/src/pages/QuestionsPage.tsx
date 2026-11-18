@@ -761,9 +761,9 @@ export default function QuestionsPage() {
     e.preventDefault();
     const name = jot.trim();
     if (!name) return;
+    setJot("");
     try {
       const rq = await api.createResearchQuestion({ name });
-      setJot("");
       await load();
       select(String(rq.id));
       toast("Question added. It starts gathering passages as you listen.");

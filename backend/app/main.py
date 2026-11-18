@@ -37,6 +37,9 @@ from .routers import (
 from .seed import seed_research_questions
 
 config = get_config()
+if config.database_url and config.data_source != "cortico_api":
+    # snapshot mode has no sign-in: every request would be the default user, on real data.
+    raise RuntimeError("DATABASE_URL is set, so DATA_SOURCE must be cortico_api")
 
 
 @asynccontextmanager

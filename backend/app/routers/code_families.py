@@ -329,6 +329,8 @@ def accept_family(
     family_id: int, prototype_db: Session = Depends(get_prototype_db), user: CurrentUser = Depends(current_user)
 ):
     family = owned_family(prototype_db, family_id, user)
+    if family.status not in LIVE_FAMILY_STATUSES:
+        raise HTTPException(409, f"this code family is {family.status} and can't be accepted")
     if family.status != "accepted":
         activity.log_activity(
             prototype_db, user.id, "user", activity.CODE_FAMILY_ACCEPTED,

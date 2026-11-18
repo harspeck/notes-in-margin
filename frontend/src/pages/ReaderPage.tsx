@@ -270,9 +270,14 @@ function Reader({ id }: { id: number }) {
 
   const createHighlight = (spans: HighlightSnippetSpan[], kind: HighlightKind) =>
     guard(async () => {
-      let h = await api.createHighlight(id, { notes: "", snippets: spans });
-      if (kind === "star") h = await api.updateHighlight(h.id, { starred: true });
-      setHighlights((prev) => [...prev, h]);
+      const made = await api.createHighlight(id, { notes: "", snippets: spans });
+      // Shown as soon as it exists: if starring fails, the highlight is still there to star again.
+      setHighlights((prev) => [...prev, made]);
+      if (kind === "star") {
+        const starred = await api.updateHighlight(made.id, { starred: true });
+        setHighlights((prev) => prev.map((x) => (x.id === made.id ? starred : x)));
+      }
+      const h = made;
       if (kind === "note") setEditingNoteId(h.id);
       toast(kind === "star" ? "Highlighted and starred." : "Highlighted.");
     });

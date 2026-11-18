@@ -144,6 +144,26 @@ def undo_insight_merge(prototype_db: Session, merge: InsightMerge) -> None:
 
     write_connection_revision(prototype_db, target)
     added = {(a["snippet_id"], a["start_index"], a["end_index"]) for a in json.loads(merge.added_evidence_json)}
+    # A span another insight still merged into the target also cites stays, and that merge
+    # takes it over, so undoing it later removes the span then.
+    others = (
+        prototype_db.query(InsightMerge)
+        .filter(
+            InsightMerge.target_connection_id == target.id,
+            InsightMerge.status == "active",
+            InsightMerge.id != merge.id,
+        )
+        .order_by(InsightMerge.id)
+        .all()
+    )
+    for other in others:
+        other_source = prototype_db.get(ReflectionConnection, other.source_connection_id)
+        shared = added & {(e.snippet_id, e.start_index, e.end_index) for e in (other_source.evidence if other_source else [])}
+        if shared:
+            kept = json.loads(other.added_evidence_json)
+            kept += [{"snippet_id": s, "start_index": a, "end_index": b} for s, a, b in sorted(shared)]
+            other.added_evidence_json = json.dumps(kept)
+            added -= shared
     for e in list(target.evidence):
         if (e.snippet_id, e.start_index, e.end_index) in added:
             prototype_db.delete(e)

@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..auth import CurrentUser, current_user, get_source
 from ..config import get_config
 from ..cortico.source import CorticoSource
 from ..db import get_prototype_db
-from ..evidence_provenance import assigned_highlight_ids, evidence_row, highlight_spans
+from ..evidence_provenance import assigned_highlight_ids, check_evidence_snippets, evidence_row, highlight_spans
 from ..evidence_text import evidence_conversations, quoted_texts
 from ..models_prototype import (
+    ReviewRun,
     ReflectionConnection,
     ReflectionConnectionRevision,
     ReviewDraft,
@@ -114,6 +116,9 @@ def _starred_unassigned(
     ]
 
 
+REVIEW_RUN_TIMEOUT = timedelta(minutes=5)  # a run left "running" by a crash is retried after this
+
+
 @router.post("/voice_memos/{voice_memo_id}/review")
 def run_review(
     voice_memo_id: int,
@@ -122,9 +127,44 @@ def run_review(
     user: CurrentUser = Depends(current_user),
 ):
     vm = owned_voice_memo(prototype_db, voice_memo_id, user)
-    connections = ai_review.generate_connections(
-        prototype_db=prototype_db, cortico_db=cortico_db, voice_memo=vm, config=config
+    connections = (
+        prototype_db.query(ReflectionConnection)
+        .filter(ReflectionConnection.voice_memo_id == voice_memo_id)
+        .order_by(ReflectionConnection.created_at)
+        .all()
     )
+    if not connections:
+        # One review per reflection. The run is claimed before the model is called, so a
+        # double click, a second tab or a retry cannot pay for and save a second set.
+        run = prototype_db.get(ReviewRun, voice_memo_id)
+        now = datetime.now(timezone.utc)
+        if run is not None and run.status == "running":
+            started = run.started_at if run.started_at.tzinfo else run.started_at.replace(tzinfo=timezone.utc)
+            if now - started < REVIEW_RUN_TIMEOUT:
+                raise HTTPException(409, "This reflection is already being connected to your questions. Give it a moment.")
+        if run is None:
+            run = ReviewRun(voice_memo_id=voice_memo_id)
+            prototype_db.add(run)
+        run.status = "running"
+        run.started_at = now
+        try:
+            prototype_db.commit()
+        except IntegrityError:
+            prototype_db.rollback()
+            raise HTTPException(409, "This reflection is already being connected to your questions. Give it a moment.")
+        try:
+            connections = ai_review.generate_connections(
+                prototype_db=prototype_db, cortico_db=cortico_db, voice_memo=vm, config=config
+            )
+        except Exception:
+            prototype_db.rollback()
+            run = prototype_db.get(ReviewRun, voice_memo_id)
+            if run is not None:
+                run.status = "failed"
+                prototype_db.commit()
+            raise
+        run.status = "done"
+        prototype_db.commit()
     starred = (
         prototype_db.query(RLHighlight)
         .filter(RLHighlight.user_id == vm.user_id, RLHighlight.conversation_id == vm.conversation_id, RLHighlight.starred.is_(True))
@@ -181,6 +221,10 @@ def file_to_memo(
         if rq_id is not None and not owns_rq(prototype_db, rq_id, user):
             raise HTTPException(400, f"research question {rq_id} not found")
 
+    check_evidence_snippets(
+        prototype_db, cortico_db, vm,
+        {ev.snippet_id for d in body.decisions for ev in (d.evidence or [])},
+    )
     now = datetime.now(timezone.utc)
     spans = highlight_spans(prototype_db, vm.user_id, vm.conversation_id)
     refs = {"conversation_id": vm.conversation_id, "voice_memo_id": vm.id}
@@ -190,7 +234,9 @@ def file_to_memo(
             connection = prototype_db.get(ReflectionConnection, decision.connection_id)
             if connection is None or connection.voice_memo_id != voice_memo_id:
                 raise HTTPException(400, f"connection {decision.connection_id} not found on this memo")
-            if connection.status == "merged":
+            if connection.status in ("merged", "retracted"):
+                # Retracted entries come back only through restore (routers/memo.py), which
+                # closes their rl_set_aside row.
                 # Folded into another insight (rl_insight_merge). A re-filed review must not
                 # put it back in the memo beside its target; undoing the merge does that.
                 continue
@@ -257,7 +303,7 @@ def file_to_memo(
                         connection_id=connection.id, research_question_id=connection.research_question_id, **refs,
                     )
                 connection.status = "accepted"
-        else:
+        elif decision.action != "reject":
             # A connection the AI missed, added by the user during review.
             if not decision.insight_text:
                 raise HTTPException(400, "insight_text is required for a new connection")

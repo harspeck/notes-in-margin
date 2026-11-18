@@ -403,7 +403,7 @@ function InsightCard({
         <blockquote key={i} className="evidence-quote">
           {e.starred && <span className="evidence-star" title="Starred highlight">★ </span>}
           {entry.conversation_id != null ? (
-            <Link to={`/read/${entry.conversation_id}?snippet=${e.snippet_id}`}>
+            <Link to={`/read/${e.conversation_id ?? entry.conversation_id}?snippet=${e.snippet_id}`}>
               "{e.text || `snippet ${e.snippet_id}`}"
             </Link>
           ) : (

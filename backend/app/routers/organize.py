@@ -38,9 +38,12 @@ def _target_rqs(prototype_db: Session, edges: dict[int, int], user_id: int) -> l
 def _filed_connections(prototype_db: Session, group: list[int]) -> list[ReflectionConnection]:
     connections = (
         prototype_db.query(ReflectionConnection)
+        .join(VoiceMemo, VoiceMemo.id == ReflectionConnection.voice_memo_id)
+        .join(ResearchQuestion, ResearchQuestion.id == ReflectionConnection.research_question_id)
         .filter(
             ReflectionConnection.research_question_id.in_(group),
             ReflectionConnection.status.in_(FILED_STATUSES),
+            VoiceMemo.user_id == ResearchQuestion.user_id,  # never another user's insight
         )
         .all()
     )

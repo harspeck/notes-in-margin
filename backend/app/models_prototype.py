@@ -470,6 +470,17 @@ class RecommendationRun(PrototypeBase):
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
 
 
+class ReviewRun(PrototypeBase):
+    """One AI review of a reflection, claimed before the model is called, so a second
+    request (a double click, another tab, a retry) does not pay for and save a second set
+    of suggestions. status: running | done | failed."""
+
+    __tablename__ = "rl_review_run"
+    voice_memo_id = Column(Integer, ForeignKey("voice_memo.id"), primary_key=True)
+    status = Column(String, nullable=False, default="running")
+    started_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
 class SetAside(PrototypeBase):
     """One row each time a connection leaves the user's working set: retracted from the memo
     or rejected at review. It holds the status the connection had before, which is what

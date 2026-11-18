@@ -10,7 +10,9 @@ from ..auth import CurrentUser, current_user, get_source
 from ..config import get_config
 from ..cortico.source import CorticoSource, as_source
 from ..db import get_prototype_db
-from ..evidence_provenance import assigned_highlight_ids, evidence_row, user_highlight_spans
+from ..evidence_provenance import (
+    assigned_highlight_ids, check_evidence_snippets, evidence_row, user_highlight_spans,
+)
 from ..evidence_text import evidence_conversations, quoted_texts
 from ..models_prototype import (
     CodeFamily,
@@ -289,7 +291,7 @@ def get_memo(
 @router.patch("/connections/{connection_id}")
 def edit_memo_entry(
     connection_id: int, body: MemoEntryUpdate, prototype_db: Session = Depends(get_prototype_db),
-    user: CurrentUser = Depends(current_user),
+    user: CurrentUser = Depends(current_user), cortico_db: CorticoSource = Depends(get_source),
 ):
     """Edits a filed entry's text or evidence, and/or moves it to another research question.
 
@@ -326,6 +328,7 @@ def edit_memo_entry(
             for e in list(connection.evidence):
                 prototype_db.delete(e)
             vm = prototype_db.get(VoiceMemo, connection.voice_memo_id)
+            check_evidence_snippets(prototype_db, cortico_db, vm, {ev.snippet_id for ev in body.evidence})
             # By snippet, not by the reflection's conversation: a merged insight's evidence
             # comes from several conversations.
             spans = user_highlight_spans(prototype_db, vm.user_id, {ev.snippet_id for ev in body.evidence})

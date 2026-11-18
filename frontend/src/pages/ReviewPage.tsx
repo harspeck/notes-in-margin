@@ -285,6 +285,8 @@ function Review({ memoId }: { memoId: number }) {
   });
 
   function decide(c: ReflectionConnection, choice: Choice | null, text = c.insight_text) {
+    // Filing sends the draft as it stood and then clears it: a decision made meanwhile would be lost.
+    if (busy) return;
     setDraft((d) => {
       const decisions = { ...d.decisions };
       if (choice === null) delete decisions[c.id];
@@ -303,7 +305,7 @@ function Review({ memoId }: { memoId: number }) {
   function addInsight(e: FormEvent) {
     e.preventDefault();
     const text = newText.trim();
-    if (!text) return;
+    if (!text || busy) return;
     setDraft((d) => ({ ...d, added: [...d.added, { key: Date.now(), rqId: newRq === "" ? null : Number(newRq), text }] }));
     setNewText("");
     toast("Added to this review, marked as yours.");
@@ -316,7 +318,12 @@ function Review({ memoId }: { memoId: number }) {
     try {
       setReview(await api.runReview(memoId));
     } catch (e) {
-      setError(`Claude couldn't be reached (${errorText(e)}). You can still add insights by hand.`);
+      const message = errorText(e);
+      setError(
+        message.startsWith("409")
+          ? "This reflection is already being connected to your questions. Give it a moment, then reload."
+          : `Claude couldn't be reached (${message}). You can still add insights by hand.`
+      );
     } finally {
       setBusy(false);
     }

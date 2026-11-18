@@ -267,9 +267,9 @@ export default function DeskPage() {
     e.preventDefault();
     const name = jot.trim();
     if (!name) return;
+    setJot("");
     try {
       await api.createResearchQuestion({ name });
-      setJot("");
       await loadQuestions();
       toast("Question added. It starts gathering passages as you listen.");
     } catch (err) {

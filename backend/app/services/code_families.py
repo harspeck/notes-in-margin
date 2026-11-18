@@ -22,6 +22,8 @@ from ..models_prototype import (
     CodeFamilyRevision,
     CodeFamilyStar,
     ReflectionConnection,
+    ResearchQuestion,
+    VoiceMemo,
 )
 from . import activity
 from .rq_merges import resolve_rq_id, rq_group_ids
@@ -108,7 +110,10 @@ def group_for(prototype_db: Session, research_question_id: int) -> list[int]:
 def _filed_connections_for_rq(prototype_db: Session, research_question_id: int) -> list[ReflectionConnection]:
     return (
         prototype_db.query(ReflectionConnection)
+        .join(VoiceMemo, VoiceMemo.id == ReflectionConnection.voice_memo_id)
+        .join(ResearchQuestion, ResearchQuestion.id == ReflectionConnection.research_question_id)
         .filter(
+            VoiceMemo.user_id == ResearchQuestion.user_id,  # never another user's insight
             ReflectionConnection.research_question_id.in_(group_for(prototype_db, research_question_id)),
             ReflectionConnection.status.in_(FILED_STATUSES),
         )
@@ -121,7 +126,10 @@ def _valid_connection_ids(prototype_db: Session, research_question_id: int) -> s
     it's trusted — mirrors next_steps._valid_conversation_ids."""
     rows = (
         prototype_db.query(ReflectionConnection.id)
+        .join(VoiceMemo, VoiceMemo.id == ReflectionConnection.voice_memo_id)
+        .join(ResearchQuestion, ResearchQuestion.id == ReflectionConnection.research_question_id)
         .filter(
+            VoiceMemo.user_id == ResearchQuestion.user_id,  # never another user's insight
             ReflectionConnection.research_question_id.in_(group_for(prototype_db, research_question_id)),
             ReflectionConnection.status.in_(FILED_STATUSES),
         )

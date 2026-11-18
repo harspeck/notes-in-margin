@@ -46,7 +46,7 @@ Every command below was run and worked on 2026-10-26.
 | Setup (frontend) | `cd frontend && npm install` |
 | Run backend | `cd backend && .venv/bin/uvicorn app.main:app --port 8000` (no `--reload`; `GET /health` → `{"ok":true}`) |
 | Run frontend | `cd frontend && npm run dev`, then open http://localhost:5173 |
-| Test | `cd backend && OPENAI_API_KEY=sk-fake .venv/bin/python -m pytest -q` (188 tests, about 4.5 s) |
+| Test | `cd backend && OPENAI_API_KEY=sk-fake .venv/bin/python -m pytest -q` (195 tests, about 4.5 s) |
 | Create sidecar tables | `cd backend && .venv/bin/python scripts/init_db.py --env-file .env.local` (after `vercel env pull`; idempotent) |
 | Live Cortico check | `cd backend && .venv/bin/python scripts/cortico_smoke.py --api <url>/api --org 353` (the user runs it; it prompts for their Cortico password) |
 | Deploy (preview) | From the repo root: `vercel deploy . --project notes-in-the-margin-api --environment preview --yes --scope harrisonspeck-8050s-projects` (ships frontend and backend together) |
@@ -117,6 +117,8 @@ can break.
 - Every id the model returns (snippet, conversation, connection, family, RQ) is checked against the real database before it is saved, because the model can invent ids.
 - The AI only writes `status="suggested"` rows with `ai_metadata` (`model`, `reasoning_effort`, `prompt`, …), because only the user files things, and every AI row must be auditable.
 - Every model call goes through `structured_json` in `app/llm.py`, never a provider SDK directly, because that is where errors become `AIProviderError` and the provider switch lives. Never hard-code a model id or effort in a service, because they come from `config.ai_review` in `backend/config.yaml` (`anthropic`, `claude-opus-5-5`, `low`). A feature on another model passes `model=` from its own config block: `listening_suggestions` and `gists` use `claude-haiku-5-5`, which `llm.py` calls without the fallback beta because Haiku has none. The single deliberate pin is `effort="low"` in `backfill_gists.py`.
+- A snippet id that comes from the client is checked before it is stored: a highlight's snippets must be in its conversation (`create_highlight_for_user`), and evidence must pass `check_evidence_snippets` (`app/evidence_provenance.py`), because snippet text is read from `rl_cortico_snippet`, a cache shared by every user, and an unchecked id would return a transcript the user cannot open.
+- `POST /voice_memos/{id}/review` runs the model once per reflection: it returns the saved suggestions when there are any, and claims an `rl_review_run` row before calling, so a second request answers 409 while the first is running.
 - Never re-run the AI when a review is resumed, because it would duplicate suggestions (`ReviewPage.tsx` only calls `GET /voice_memos/{id}/review`; the one `runReview` after a recording or a typed reflection is `connectToQuestions` in `Notebook.tsx`).
 
 **Review and memo** (`routers/review.py`, `routers/memo.py`)

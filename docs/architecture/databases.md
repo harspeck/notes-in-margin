@@ -40,7 +40,7 @@ Snapshot facts the code depends on (`docs/prototype-log.md`):
 `rl_session`, `rl_workspace`, `rl_cortico_conversation`, `rl_cortico_snippet`,
 `rl_cortico_sync` (these five are described in `docs/architecture/cortico.md`),
 `rl_reading_state`, `rl_review_draft`, `rl_listening_interest`, `rl_listening_suggestion`,
-`rl_listening_suggestion_run`, `rl_recommendation_run`, `rl_set_aside`,
+`rl_listening_suggestion_run`, `rl_recommendation_run`, `rl_review_run`, `rl_set_aside`,
 `rl_activity`, `rl_highlight_question`, `rl_insight_move`, `rl_insight_merge`,
 `rl_merge_nudge`, `rl_passage_suggestion`, `rl_question_gap`, `rl_cortico_guide`.
 

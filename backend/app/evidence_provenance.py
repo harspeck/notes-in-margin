@@ -145,3 +145,33 @@ def evidence_row(
         end_index=ev.end_index,
         source=source,
     )
+
+
+def check_evidence_snippets(prototype_db: Session, source, vm: VoiceMemo, snippet_ids: set[int]) -> None:
+    """400 unless every snippet is one this user may quote: part of the reflection's
+    conversation, or already under one of their highlights or insights (a merged insight
+    cites other conversations). Snippet text is read from a cache shared by every user, so
+    an unchecked id would hand back a transcript the user cannot open."""
+    wanted = set(snippet_ids)
+    if not wanted:
+        return
+    from .models_prototype import HighlightSnippet, ReflectionConnection  # noqa: PLC0415
+
+    wanted -= {
+        r.snippet_id
+        for r in prototype_db.query(HighlightSnippet.snippet_id)
+        .join(RLHighlight, RLHighlight.id == HighlightSnippet.highlight_id)
+        .filter(RLHighlight.user_id == vm.user_id, HighlightSnippet.snippet_id.in_(wanted))
+    }
+    if wanted:
+        wanted -= {
+            r.snippet_id
+            for r in prototype_db.query(ConnectionEvidence.snippet_id)
+            .join(ReflectionConnection, ReflectionConnection.id == ConnectionEvidence.connection_id)
+            .join(VoiceMemo, VoiceMemo.id == ReflectionConnection.voice_memo_id)
+            .filter(VoiceMemo.user_id == vm.user_id, ConnectionEvidence.snippet_id.in_(wanted))
+        }
+    if wanted:
+        wanted -= {s.id for s in source.snippets(vm.conversation_id)}
+    if wanted:
+        raise HTTPException(400, f"snippets {sorted(wanted)} aren't in this conversation's transcript")

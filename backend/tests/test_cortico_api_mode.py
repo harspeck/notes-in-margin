@@ -609,3 +609,50 @@ def test_recommendations_never_draw_on_conversations_outside_the_users_workspace
         with PrototypeSession() as db:
             db.query(ConversationGist).filter(ConversationGist.conversation_id.in_([7001, 7002])).delete(synchronize_session=False)
             db.commit()
+
+
+def test_a_snippet_from_another_conversation_cannot_be_cited_or_highlighted(fake):
+    """Snippet text comes from a cache shared by every user, so a snippet id the user
+    supplies must belong to the conversation it is filed on."""
+    wide = _login()
+    _workspace(wide)
+    assert wide.get("/conversations/7002").status_code == 200  # caches conversation 7002's snippets
+    narrow = _login("pw-b")
+    _workspace(narrow, (501,))
+    narrow.get("/conversations")
+    vm = narrow.post("/conversations/7001/reflections", json={"text": "x"}).json()
+    body = {"decisions": [{"connection_id": None, "action": "accept", "research_question_id": None, "insight_text": "x",
+                           "evidence": [{"snippet_id": 11, "start_index": 0, "end_index": 100000}]}]}
+    r = narrow.post(f"/voice_memos/{vm['id']}/file", json=body)
+    assert r.status_code == 400 and "11" in r.json()["detail"]
+    assert narrow.get(f"/voice_memos/{vm['id']}/review").json()["connections"] == []
+    r = narrow.post("/conversations/7001/highlights", json={"snippets": [{"snippet_id": 12, "start_index": 0, "end_index": 9}]})
+    assert r.status_code == 400
+    assert narrow.get("/conversations/7001/highlights").json() == []
+
+
+def test_a_request_that_waited_for_a_refresh_reuses_it(fake):
+    """Cortico revokes a refresh token once used. A request that loaded the session before
+    another request refreshed it must read the new tokens, not send the old one."""
+    from datetime import datetime, timedelta, timezone
+
+    from app import auth as auth_module
+    from app.db import PrototypeSession
+    from app.models_prototype import RLSession
+
+    client = _login()
+    token_hash = auth_module.hash_token(client.cookies.get(get_config().session.cookie_name))
+    with PrototypeSession() as db:
+        db.get(RLSession, token_hash).access_expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db.commit()
+    waiting = PrototypeSession()
+    try:
+        row = waiting.get(RLSession, token_hash)
+        assert row.refresh_token_enc  # loaded, as current_user does, before the other request refreshes
+        with PrototypeSession() as first:
+            auth_module.refresh_session(first, token_hash)
+        auth_module.refresh_session(waiting, token_hash)
+    finally:
+        waiting.close()
+    assert fake.calls.count("POST /auth/refresh-tokens") == 1
+    assert client.get("/auth/me").status_code == 200
