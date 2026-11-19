@@ -42,7 +42,9 @@ Snapshot facts the code depends on (`docs/prototype-log.md`):
 `rl_reading_state`, `rl_review_draft`, `rl_listening_interest`, `rl_listening_suggestion`,
 `rl_listening_suggestion_run`, `rl_recommendation_run`, `rl_review_run`, `rl_set_aside`,
 `rl_activity`, `rl_highlight_question`, `rl_insight_move`, `rl_insight_merge`,
-`rl_merge_nudge`, `rl_passage_suggestion`, `rl_question_gap`, `rl_cortico_guide`.
+`rl_merge_nudge`, `rl_passage_suggestion`, `rl_question_gap`, `rl_cortico_guide`,
+`rl_adoption`, `rl_team_question_group`, `rl_team_question_member`, `rl_team_theme`,
+`rl_team_theme_member`, `rl_team_theme_revision`.
 
 `rl_rq_focus` to `rl_code_family_revision` back the Organize page (2026-10-26). They carry the `rl_` prefix because
 `codebook`, `code` and `coding` already exist in `db/schema.sql`. They were added as new
@@ -83,6 +85,19 @@ names were checked against `db/schema.sql`, and their timestamps are
 | `rl_question_gap` | `id`, `user_id`, `research_question_id`, `gap_kind` (`perspective`, `counter_view` or `thin_spot`), `observation`, `conversation_ids_json`, `status` (`suggested` or `dismissed`), `ai_metadata`, `created_at`, `updated_at` | A "what am I missing" observation, with the unopened conversations it names. |
 | `rl_cortico_guide` | `project_id` (PK), `questions_json` (`[{id, text, shorthand_code, order_index}]`), `fetched_at` | `cortico_api` mode's cache of a project's latest conversation guide, refreshed after `cortico.snippet_cache_ttl_seconds`. See `docs/architecture/cortico.md`. |
 
+The Team Page and team codebook (2026-11-18) added six tables and changed no column. None of
+them has an owner column that gates reads: every read goes through `services/team.py`, which
+limits it to the viewer's conversations (`docs/architecture/routers.md`, "Team").
+
+| Table | Key columns | Purpose |
+|---|---|---|
+| `rl_adoption` | `id`, `user_id`, `kind` (`question`), `source_id`, `source_user_id`, `new_id`, `created_at` | That a user copied a teammate's question into their own (`POST /team/questions/{id}/adopt`). `source_id` is the teammate's `research_question.id`, `new_id` the copy. One per user and source, enforced in code (409). |
+| `rl_team_question_group` | `id`, `name`, `status` (`suggested`, `active` or `dismissed`), `created_by` (null when the AI suggested it), `ai_metadata` (null for user rows; holds `requested_by`), `rationale`, `created_at`, `updated_at` | Questions of different people that ask the same thing. Belongs to nobody. |
+| `rl_team_question_member` | `id`, `group_id`, `research_question_id`, `added_by`, `created_at` | A question in a group. A question is in at most one `active` group, enforced in code (409), because a `suggested` group may overlap an active one. Removing a question from a group deletes the row; it is not audit data. |
+| `rl_team_theme` | `id`, `group_id`, `name`, `definition`, `status` (`suggested`, `accepted` or `dismissed`), `ai_metadata`, `created_by` (null for the AI), `updated_by`, `created_at`, `updated_at` | A theme of the team codebook under one question group. |
+| `rl_team_theme_member` | `id`, `theme_id`, `connection_id` | A filed insight, by any author, in a theme. |
+| `rl_team_theme_revision` | `id`, `theme_id`, `name`, `definition`, `member_ids_json`, `edited_by`, `created_at` | The theme as it was before each user edit of its name, definition or members. |
+
 `reflection_connection.status` gained the value `merged` (an insight folded into another by
 `rl_insight_merge`). No column changed: the status column is a plain string.
 
@@ -114,7 +129,10 @@ string (the column is NOT NULL), with `duration` null, `transcription_raw` null 
     written before it;
   - `connection_evidence` rows replaced by an evidence edit or removed by undoing an
     insight merge, which are audited by the `reflection_connection_revision` written first;
-  - `rl_highlight_question` rows, which are not audit data.
+  - `rl_highlight_question` rows, which are not audit data;
+  - an `rl_team_theme_member` row removed by `PUT /team/themes/{id}/members`, which is
+    audited by the `rl_team_theme_revision` row written before it, and an
+    `rl_team_question_member` row, which is not audit data.
 - An insight merge never deletes the source's evidence. The target gets copies, and
   `rl_insight_merge.added_evidence_json` lists them. Undo removes the target's evidence
   with those spans (matched by span, not row id, because an evidence edit re-creates rows).

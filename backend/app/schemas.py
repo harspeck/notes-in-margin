@@ -168,3 +168,31 @@ class ListeningInterestCreate(BaseModel):
 
 class ListeningInterestUpdate(BaseModel):
     text: str = Field(min_length=1, max_length=LISTENING_INTEREST_MAX_CHARS)
+
+
+class TeamQuestionGroupCreate(BaseModel):
+    name: str | None = None  # default: the first question's name
+    research_question_ids: list[int] = Field(min_length=1)
+
+
+class TeamQuestionGroupUpdate(BaseModel):
+    name: str | None = None
+
+
+class TeamGroupQuestionAdd(BaseModel):
+    research_question_id: int
+
+
+class TeamThemeCreate(BaseModel):
+    name: str = Field(min_length=1)
+    definition: str
+    connection_ids: list[int] = []
+
+
+class TeamThemeUpdate(BaseModel):
+    name: str | None = None
+    definition: str | None = None
+
+
+class TeamThemeMembersUpdate(BaseModel):
+    connection_ids: list[int]

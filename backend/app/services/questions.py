@@ -9,6 +9,7 @@ from collections import Counter
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from ..config import get_config
 from ..cortico.source import ConversationRef, as_source
 from ..evidence_text import quoted_texts
 from ..models_prototype import (
@@ -27,6 +28,28 @@ from .rq_merges import active_merge_edges, resolve_rq_id, rq_group_ids
 GUIDE_IDEAS_LIMIT = 12
 # Workspace projects whose guide is not cached yet cost one Cortico call each.
 GUIDE_IDEAS_MAX_PROJECT_FETCHES = 5
+
+
+# --- creating a question ----------------------------------------------------------------
+
+
+def create_question(
+    prototype_db: Session, user_id: int, workspace_project_ids: list[int], name: str, description: str | None
+) -> ResearchQuestion:
+    """Adds a research question for the user and flushes it. The one place a question row is
+    made (POST /research_questions and adopting a teammate's question), so project id and
+    display order are always set the same way. The caller logs activity and commits."""
+    rq = ResearchQuestion(
+        user_id=user_id,
+        # A research question spans the workspace; project_id records where it started.
+        project_id=workspace_project_ids[0] if workspace_project_ids else get_config().default_project_id,
+        name=name,
+        description=description,
+        display_order=prototype_db.query(ResearchQuestion).filter(ResearchQuestion.user_id == user_id).count(),
+    )
+    prototype_db.add(rq)
+    prototype_db.flush()
+    return rq
 
 
 # --- scope ------------------------------------------------------------------------------

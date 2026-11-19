@@ -24,6 +24,7 @@ const CHANGED_KINDS = new Set([
   "memo_entry_moved",
   "insights_merged",
   "insight_merge_undone",
+  "team_theme_edited",
 ]);
 const SET_ASIDE_KINDS = new Set([
   "insight_set_aside",
@@ -34,6 +35,8 @@ const SET_ASIDE_KINDS = new Set([
   "merge_nudge_dismissed",
   "passage_dismissed",
   "question_gap_dismissed",
+  "team_group_dismissed",
+  "team_theme_dismissed",
 ]);
 
 function KindTag({ item }: { item: ActivityItem }) {

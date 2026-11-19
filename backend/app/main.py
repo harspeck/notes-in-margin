@@ -31,6 +31,7 @@ from .routers import (
     research_questions,
     review,
     settings,
+    team,
     voice_memos,
     workspaces,
 )
@@ -106,6 +107,7 @@ app.include_router(activity.router, dependencies=signed_in)
 app.include_router(merge_nudges.router, dependencies=signed_in)
 app.include_router(question_levers.router, dependencies=signed_in)
 app.include_router(gists.router, dependencies=signed_in)
+app.include_router(team.router, dependencies=signed_in)
 
 
 @app.get("/health")

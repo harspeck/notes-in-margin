@@ -319,3 +319,30 @@ insights, merge nudges, "find more passages" and "what am I missing".
   `test_merge_nudges.py`, `test_question_levers.py`, plus three in
   `test_cortico_api_mode.py` (177 tests in all). None calls the model. Nothing was run
   against Postgres or the real Cortico API.
+
+## Team Page and team codebook backend (2026-11-18)
+
+- **Decision (the owner, 2026-11-18):** anything a user made on a conversation another user
+  can read is visible to that user, read-only, including highlight notes, insights and
+  reflection text. Set-aside items, review drafts, the activity log, hear-next lines and
+  undecided AI suggestions stay private. The personal pages are unchanged.
+- **New tables only:** `rl_adoption`, `rl_team_question_group`, `rl_team_question_member`,
+  `rl_team_theme`, `rl_team_theme_member`, `rl_team_theme_revision`. None collides with
+  `db/schema.sql`. No existing column changed.
+- **One module holds the access rule:** `services/team.py`. It was written after a review
+  found two cross-user leaks from reading the shared caches without a scope filter.
+- **Choices the spec left open:**
+  - An insight or highlight counts under a question only when the same person owns both.
+  - `filed_at` is the insight's `updated_at`; there is no column for when it was filed.
+  - A theme is hidden from a viewer who can see none of its members, so a theme built only
+    from another project's insights does not describe them to that viewer. A side effect:
+    a viewer who removes the last member they can see stops seeing the theme.
+  - Replacing a theme's members keeps the members outside the viewer's scope.
+  - A group whose last question is removed is seen by nobody; the row and its themes stay.
+  - A suggested group is visible to everyone who can see one of its questions, not only to
+    the user who asked the AI. `ai_metadata.requested_by` records who asked.
+- **Not measured:** no model was called. The two new prompts have never run against
+  Claude, so their output quality, token use and timing are unknown.
+- Tests: `test_team.py` (201 tests in all). The scope test was checked to fail with the
+  filter removed. Nothing was run against Postgres or the real Cortico API.
+

@@ -46,7 +46,7 @@ Every command below was run and worked on 2026-10-26.
 | Setup (frontend) | `cd frontend && npm install` |
 | Run backend | `cd backend && .venv/bin/uvicorn app.main:app --port 8000` (no `--reload`; `GET /health` → `{"ok":true}`) |
 | Run frontend | `cd frontend && npm run dev`, then open http://localhost:5173 |
-| Test | `cd backend && OPENAI_API_KEY=sk-fake .venv/bin/python -m pytest -q` (195 tests, about 4.5 s) |
+| Test | `cd backend && OPENAI_API_KEY=sk-fake .venv/bin/python -m pytest -q` (201 tests, about 5 s) |
 | Create sidecar tables | `cd backend && .venv/bin/python scripts/init_db.py --env-file .env.local` (after `vercel env pull`; idempotent) |
 | Live Cortico check | `cd backend && .venv/bin/python scripts/cortico_smoke.py --api <url>/api --org 353` (the user runs it; it prompts for their Cortico password) |
 | Deploy (preview) | From the repo root: `vercel deploy . --project notes-in-the-margin-api --environment preview --yes --scope harrisonspeck-8050s-projects` (ships frontend and backend together) |
@@ -83,7 +83,7 @@ shared state:
 | `db/prototype.db` | The user's real dev data. Never wipe, recreate or bulk-edit it, because it can't be regenerated. |
 | Schema changes | There are no migrations; `PrototypeBase.metadata.create_all` (in `main.py`'s lifespan) only adds missing tables. A new table only needs a name checked against `db/schema.sql`. A new or changed column on an existing table: **stop and ask the user how to migrate**, and give the column, type, default and the tables affected. |
 | Backups in `db/local/` | `exports/` (Markdown memo and transcripts), `exports-<date>/` (earlier exports) and `prototype-<timestamp>.db` (database copies) are the user's backups. Refresh them only when the user asks, and only with `scripts/export_md.py`, because it moves the previous export aside and never overwrites a backup. Never delete or hand-edit them. |
-| Paid model calls (Claude) | `POST /voice_memos/{id}/review`, `POST /next_steps/generate`, `POST /research_questions/{rq_id}/code_families/synthesize`, `POST /merge_nudges/generate`, `POST /research_questions/{rq_id}/find_passages` (one call per conversation searched, up to `find_passages.max_conversations_per_run`), `POST /research_questions/{rq_id}/whats_missing`, `POST /gists/generate` (one call per conversation, up to `gists.max_per_request`), `scripts/backfill_gists.py`. Two more call the model only when their cache rules allow, and the Desk and the Review page call them on their own: `POST /listening_interests/suggestions/refresh` and `POST /next_steps/recommend`. Ask before triggering any of them. Tests never call the model; check a live round trip by hand only with the user's go-ahead. |
+| Paid model calls (Claude) | `POST /voice_memos/{id}/review`, `POST /next_steps/generate`, `POST /research_questions/{rq_id}/code_families/synthesize`, `POST /merge_nudges/generate`, `POST /research_questions/{rq_id}/find_passages` (one call per conversation searched, up to `find_passages.max_conversations_per_run`), `POST /research_questions/{rq_id}/whats_missing`, `POST /gists/generate` (one call per conversation, up to `gists.max_per_request`), `POST /team/question_groups/suggest`, `POST /team/question_groups/{id}/themes/synthesize`, `scripts/backfill_gists.py`. Two more call the model only when their cache rules allow, and the Desk and the Review page call them on their own: `POST /listening_interests/suggestions/refresh` and `POST /next_steps/recommend`. Ask before triggering any of them. Tests never call the model; check a live round trip by hand only with the user's go-ahead. |
 | Backfill scripts on the dev database | The user runs these. Hand off the dry run first as one line, e.g. `cd backend && .venv/bin/python scripts/backfill_evidence_highlights.py --dry-run`, say what output to expect, then give the real run. Try it first against a copy via `PROTOTYPE_DB_PATH`. |
 | `backend/.env` | Holds `ANTHROPIC_API_KEY` (and the older `OPENAI_API_KEY` and `OPENAI_BASE_URL`). Production reads `ANTHROPIC_API_KEY` from the Vercel env. Never print or open it; check by variable name only. The user edits it. |
 | `backend/.env.local` and Vercel env | `vercel env pull` writes the Neon credentials here. Never print values; use `vercel env ls` for names. `SESSION_SECRET` encrypts every stored Cortico token: rotating it signs everyone out. |
@@ -155,6 +155,16 @@ can break.
 - Every RQ-scoped read (memo sections, code family lists, the cap, synthesis input, `/organize`, `/codebook_prep`, breadth, a question's highlights, passage suggestions, gaps, merge nudges) goes through `resolve_rq_id` and `rq_group_ids`, because a merged RQ's entries and families keep their own `research_question_id` and must read under the target. `services/code_families.group_for` wraps both.
 - A merge archives the source; undo sets `rl_rq_merge.status = "undone"` and un-archives it. Merge rows are never deleted. Merging an archived source, into an archived or merged target, or into itself returns 409, and so does un-archiving a merged RQ through `PATCH /research_questions/{id}`.
 
+**Team** (`services/team.py`, `routers/team.py`)
+- The team routes are the only ones that return another user's rows, and every one of them reads through `services/team.py` (`load_view`, the `visible_*` helpers). Never query another user's highlights, reflections, insights or questions anywhere else, and never add a team read that skips `load_view`, because the access rule lives in that one module.
+- The rule: a viewer sees a teammate's row only when its conversation is in their scope, which is their active workspace's conversations in `cortico_api` mode (`team_scope`, from the cached listing) and every conversation in `snapshot` mode. Insights must also be filed (`accepted` or `edited`). A question is visible when it is not archived and has something visible filed under it or belongs to a workspace project. Anything else answers 404, never 403.
+- Evidence and highlight text is returned only for snippets whose own conversation is in scope (`_scoped_snippets`), and conversation titles come from the scope, because `rl_cortico_snippet` and `rl_cortico_conversation` are shared by every user and an insight merge copies evidence across conversations (`test_a_narrower_workspace_sees_nothing_made_outside_it`).
+- Never trust a question, conversation, insight, group, theme or user id from the client: check it against the view (`visible_question`, `visible_conversation`, `visible_group`, `visible_theme`).
+- Set-aside, suggested and merged insights, review drafts, the activity log, hear-next lines and a user's own undecided AI suggestions stay private. Never add them to a team route.
+- Question groups and themes belong to nobody: whoever can see one of a group's questions can see and change it, and sees only those questions and their insights. A question is in at most one `active` group (409). Every user edit of a theme's name, definition or members writes an `rl_team_theme_revision` first and sets `updated_by`.
+- Adopting a question goes through `questions.create_question`, the function `POST /research_questions` runs, because project id and display order must be set the same way.
+- Both paid team routes build their payload from the view, so the model is shown nothing outside the viewer's scope, and their apply steps (`_apply_group_suggestions`, `_apply_theme_results`) check every id against what was sent.
+
 **Values defined twice. Change both together.**
 - `FILED_STATUSES = ("accepted", "edited")` is in both `routers/memo.py` and `services/code_families.py`.
 - The voice memo cap: `voice_memo.max_duration_seconds: 1200` in `config.yaml`, and `MAX_VOICE_MEMO_SECONDS = 1200` in `frontend/src/pages/ReaderPage.tsx`.
@@ -176,6 +186,7 @@ can break.
 | Code families, the cap, merges | `docs/architecture/code-families.md` |
 | Frontend pages, components, `api.ts`, `types.ts` | `docs/architecture/frontend.md` |
 | Cortico API, sign-in, workspaces, caches, write-back | `docs/architecture/cortico.md` |
+| The Team Page, team codebook and their access rule | `docs/architecture/routers.md` ("Team"), then `backend/app/services/team.py` |
 | Writing or changing tests | `docs/architecture/tests.md` |
 
 ## 6. Key conventions

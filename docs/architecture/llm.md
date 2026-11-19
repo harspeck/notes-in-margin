@@ -45,6 +45,8 @@ that answered.
 | `backfill` (`scripts/backfill_gists.py`) | `conversation_gist`: `{summary, keywords}` | Effort is pinned to `"low"`. Rows that already exist are skipped, and it commits per conversation, so it can resume. |
 | `generate_missing` (`services/gists.py`) | `conversation_gist`: `{summary, keywords}` | The same prompt and schema as the backfill, for whatever the request's data source can read (hosted conversations included). Runs on `gists.model` (`claude-haiku-5-5`). A conversation with no transcript gets an empty gist row so it is not fetched again. |
 | `refresh` and `apply_suggestions` (`services/listening_suggestions.py`) | `listening_suggestions`: `{suggestions: [{text, reason}]}` | Sent the user's active questions, their newest highlights with notes, the lines already on the list and the lines turned down. Runs on `listening_suggestions.model` (`claude-haiku-5-5`). Anything matching an existing line or an earlier offer is dropped. Cached by fingerprint; see CLAUDE.md. |
+| `suggest_groups` and `_apply_group_suggestions` (`services/team.py`) | `team_question_groups`: `{groups: [{name, rationale, question_ids}]}` | Sent every question the viewer can see that is not in an active group (id, question, description, the author's name). Runs on `team.model` (`claude-haiku-5-5`) at `team.reasoning_effort`. An id outside that set is dropped, and so is a question that would sit with one it already shares a `suggested` or `dismissed` group with, so "keep separate" sticks. A group left with fewer than two questions, or with no name, is not saved. Skipped, with no call, when fewer than two such questions exist. |
+| `synthesize_themes` and `_apply_theme_results` (`services/team.py`) | `team_themes`: `{themes: [{name, definition, connection_ids}]}` | Sent the group's filed insights the viewer can see (id, text, the author's name, the conversation title), the group's visible themes and `team.max_new_themes_per_run`. Runs on `ai_review.model`, with no override. Connection ids outside the insights sent are dropped, then a theme with no member left, one whose normalised name matches any theme of the group (dismissed ones too) or repeats in the run, and anything past the cap. Skipped, with no call, when the group has no visible filed insight. |
 
 ## What each of the three question-screen calls is sent
 
@@ -96,6 +98,10 @@ user removed, plus the ones they added. It still runs when there are none.
 - Accepting a merge nudge or a passage suggestion runs the code the user's own action runs
   (`merge_rq`, `merge_insights`, `create_highlight_for_user`). Never write a second copy of
   those for the AI path.
+- Both team calls build their payload from a `TeamView` (`services/team.py`), so the model is
+  never shown a question, insight or conversation title from outside the viewer's scope, and
+  their rows are `suggested` with `ai_metadata` that also holds `requested_by` (the user who
+  asked), because team rows have no owner.
 - Model ids and effort come from `config.ai_review`. The single deliberate exception is the
   gist backfill's `"low"` pin.
 - The review prompt can be edited. It is stored in `app_setting` under `"review_prompt"`

@@ -7,6 +7,7 @@ import type {
   Breadth,
   ConversationDetail,
   CorticoHighlight,
+  TeamHighlight,
   Highlight,
   HighlightSnippetSpan,
   PassageSuggestion,
@@ -69,6 +70,7 @@ function Reader({ id }: { id: number }) {
   const [conversation, setConversation] = useState<ConversationDetail | null>(null);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [corticoHighlights, setCorticoHighlights] = useState<CorticoHighlight[]>([]);
+  const [teamHighlights, setTeamHighlights] = useState<TeamHighlight[]>([]);
   const [researchQuestions, setResearchQuestions] = useState<ResearchQuestion[] | null>(null);
   const [breadth, setBreadth] = useState<Breadth | null>(null);
   // Undecided passages the AI found in this conversation. The transcript marks them and the
@@ -123,6 +125,10 @@ function Reader({ id }: { id: number }) {
     api
       .listCorticoHighlights(id)
       .then(setCorticoHighlights)
+      .catch(() => {});
+    api
+      .listTeamHighlights(id)
+      .then(setTeamHighlights)
       .catch(() => {});
     api
       .listResearchQuestions()
@@ -520,6 +526,7 @@ function Reader({ id }: { id: number }) {
           conversation={conversation}
           highlights={highlights}
           corticoHighlights={corticoHighlights}
+          teamHighlights={teamHighlights}
           onCreateHighlight={createHighlight}
           onUpdateHighlight={updateHighlight}
           onDeleteHighlight={deleteHighlight}

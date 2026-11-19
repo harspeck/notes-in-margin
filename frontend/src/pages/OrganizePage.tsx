@@ -618,6 +618,9 @@ export default function OrganizePage() {
       <RQSidebar data={data} selectedId={selected?.rq.id} onSelect={select} onChanged={load} />
       <main className="organize-col organize-main">
         {loadError && <p className="error-text">{loadError}</p>}
+        <p className="meta">
+          This is your own codebook. The themes your team builds together are in the <Link to="/team">Team codebook</Link>.
+        </p>
         {notice && (
           <p className="notice">
             {notice}{" "}

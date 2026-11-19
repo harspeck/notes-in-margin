@@ -45,6 +45,14 @@ import type {
   RQMergeResult,
   RQMergeUndoResult,
   SetAsideItem,
+  TeamGroupDetail,
+  TeamHighlight,
+  TeamOverview,
+  TeamPersonDetail,
+  TeamQuestionDetail,
+  TeamQuestionGroup,
+  TeamTheme,
+  TeamThemeRevision,
   VoiceMemo,
 } from "./types";
 
@@ -300,6 +308,50 @@ export const api = {
     request<CodeFamilyMergeResult>("/code_families/merge", { method: "POST", body: JSON.stringify(body) }),
   acceptCodeFamily: (id: number) => request(`/code_families/${id}/accept`, { method: "POST" }),
   dismissCodeFamily: (id: number) => request(`/code_families/${id}/dismiss`, { method: "POST" }),
+
+  getTeam: () => request<TeamOverview>("/team"),
+  getTeamQuestion: (rqId: number) => request<TeamQuestionDetail>(`/team/questions/${rqId}`),
+  getTeamPerson: (userId: number) => request<TeamPersonDetail>(`/team/people/${userId}`),
+  listTeamHighlights: (conversationId: number) =>
+    request<TeamHighlight[]>(`/conversations/${conversationId}/team_highlights`),
+  /** Copies a teammate's question into the user's own questions. */
+  adoptTeamQuestion: (rqId: number) => request<ResearchQuestion>(`/team/questions/${rqId}/adopt`, { method: "POST" }),
+
+  createTeamQuestionGroup: (body: { name?: string; research_question_ids: number[] }) =>
+    request<TeamQuestionGroup>("/team/question_groups", { method: "POST", body: JSON.stringify(body) }),
+  renameTeamQuestionGroup: (id: number, name: string) =>
+    request<TeamQuestionGroup>(`/team/question_groups/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+  addTeamGroupQuestion: (id: number, researchQuestionId: number) =>
+    request<TeamQuestionGroup>(`/team/question_groups/${id}/questions`, {
+      method: "POST",
+      body: JSON.stringify({ research_question_id: researchQuestionId }),
+    }),
+  removeTeamGroupQuestion: (id: number, researchQuestionId: number) =>
+    request(`/team/question_groups/${id}/questions/${researchQuestionId}`, { method: "DELETE" }),
+  acceptTeamQuestionGroup: (id: number) =>
+    request<TeamQuestionGroup>(`/team/question_groups/${id}/accept`, { method: "POST" }),
+  dismissTeamQuestionGroup: (id: number) =>
+    request<TeamQuestionGroup>(`/team/question_groups/${id}/dismiss`, { method: "POST" }),
+  /** Paid. */
+  suggestTeamQuestionGroups: () => request<TeamQuestionGroup[]>("/team/question_groups/suggest", { method: "POST" }),
+  getTeamQuestionGroup: (id: number, includeDismissed = false) =>
+    request<TeamGroupDetail>(`/team/question_groups/${id}${includeDismissed ? "?include_dismissed=true" : ""}`),
+
+  /** Paid. */
+  synthesizeTeamThemes: (groupId: number) =>
+    request<TeamTheme[]>(`/team/question_groups/${groupId}/themes/synthesize`, { method: "POST" }),
+  createTeamTheme: (groupId: number, body: { name: string; definition: string; connection_ids: number[] }) =>
+    request<TeamTheme>(`/team/question_groups/${groupId}/themes`, { method: "POST", body: JSON.stringify(body) }),
+  updateTeamTheme: (id: number, body: { name?: string; definition?: string }) =>
+    request<TeamTheme>(`/team/themes/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  setTeamThemeMembers: (id: number, connectionIds: number[]) =>
+    request<TeamTheme>(`/team/themes/${id}/members`, {
+      method: "PUT",
+      body: JSON.stringify({ connection_ids: connectionIds }),
+    }),
+  acceptTeamTheme: (id: number) => request<TeamTheme>(`/team/themes/${id}/accept`, { method: "POST" }),
+  dismissTeamTheme: (id: number) => request<TeamTheme>(`/team/themes/${id}/dismiss`, { method: "POST" }),
+  getTeamThemeHistory: (id: number) => request<TeamThemeRevision[]>(`/team/themes/${id}/history`),
 
   getReviewPrompt: () => request<{ text: string; default_text: string }>("/settings/review-prompt"),
   saveReviewPrompt: (text: string) =>

@@ -68,6 +68,14 @@ LISTENING_LINES_SUGGESTED = "listening_lines_suggested"
 LISTENING_LINE_ACCEPTED = "listening_line_accepted"
 LISTENING_LINE_DISMISSED = "listening_line_dismissed"
 GISTS_GENERATED = "gists_generated"
+QUESTION_ADOPTED = "question_adopted"
+TEAM_GROUP_CREATED = "team_group_created"
+TEAM_GROUPS_SUGGESTED = "team_groups_suggested"
+TEAM_GROUP_DISMISSED = "team_group_dismissed"
+TEAM_THEMES_SUGGESTED = "team_themes_suggested"
+TEAM_THEME_ACCEPTED = "team_theme_accepted"
+TEAM_THEME_EDITED = "team_theme_edited"
+TEAM_THEME_DISMISSED = "team_theme_dismissed"
 
 KINDS: dict[str, str] = {
     # actor "ai"
@@ -79,6 +87,8 @@ KINDS: dict[str, str] = {
     QUESTION_GAPS_SUGGESTED: OTHER,
     LISTENING_LINES_SUGGESTED: OTHER,
     GISTS_GENERATED: OTHER,
+    TEAM_GROUPS_SUGGESTED: OTHER,
+    TEAM_THEMES_SUGGESTED: OTHER,
     # actor "user"
     REFLECTION_TYPED: OTHER,
     REFLECTION_RECORDED: OTHER,
@@ -112,6 +122,12 @@ KINDS: dict[str, str] = {
     PASSAGE_DISMISSED: SET_ASIDE,
     QUESTION_GAP_DISMISSED: SET_ASIDE,
     QUESTION_GAP_LISTEN_NEXT: OTHER,
+    QUESTION_ADOPTED: OTHER,
+    TEAM_GROUP_CREATED: OTHER,
+    TEAM_GROUP_DISMISSED: SET_ASIDE,
+    TEAM_THEME_ACCEPTED: OTHER,
+    TEAM_THEME_EDITED: CHANGED,
+    TEAM_THEME_DISMISSED: SET_ASIDE,
 }
 
 

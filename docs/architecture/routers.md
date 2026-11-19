@@ -108,6 +108,25 @@ mode every route below the `auth` rows answers 401 without a session.
 | | `GET /research_questions/{rq_id}/gaps` | `list_gaps` (observations not dismissed, newest first) |
 | | `POST /question_gaps/{gap_id}/dismiss` | `dismiss_gap` |
 | | `POST /question_gaps/{gap_id}/listen_next` | `gap_listen_next` (body optional: `conversation_ids`, a subset of the gap's; adds `suggested` next-step rows; 409 if dismissed or no conversation is named, 422 for an id the gap doesn't name) |
+| team | `GET /team` | `get_team` (people, questions and question groups over the viewer's scope; see "Team" below) |
+| | `GET /team/questions/{rq_id}` | `get_team_question` (the question with the filed insights and highlights under it; 404 unless visible) |
+| | `GET /team/people/{user_id}` | `get_team_person` (their reflections and questions; 404 unless they have a visible row) |
+| | `GET /conversations/{conversation_id}/team_highlights` | `list_team_highlights` (other users' highlights on the conversation, never the viewer's own; 404 unless the conversation is in scope) |
+| | `POST /team/questions/{rq_id}/adopt` | `adopt_question` (copies a teammate's question into the viewer's own through `questions.create_question`, writes `rl_adoption`; 409 if already adopted or already the viewer's; returns what `POST /research_questions` returns) |
+| | `POST /team/question_groups` | `create_question_group` (body `{name?, research_question_ids}`, at least one, all visible; an `active` group named after the first question by default; 409 if a question is already in an active group) |
+| | `POST /team/question_groups/suggest` | `suggest_question_groups` (**paid**, one call on `team.model`; returns the `suggested` groups this run created, `[]` without a call when fewer than two ungrouped questions are visible) |
+| | `GET /team/question_groups/{group_id}?include_dismissed=` | `get_question_group` (the group, its visible questions, every visible filed insight under them, and its themes; dismissed themes only when asked) |
+| | `PATCH /team/question_groups/{group_id}` | `update_question_group` (body `{name?}`; 422 for an empty name) |
+| | `POST /team/question_groups/{group_id}/questions` | `add_question_to_group` (body `{research_question_id}`; 409 if the question is in another active group, or the group is still `suggested`) |
+| | `DELETE /team/question_groups/{group_id}/questions/{rq_id}` | `remove_question_from_group` (404 if the question is not a visible member) |
+| | `POST /team/question_groups/{group_id}/accept` | `accept_question_group` (a `suggested` group becomes `active`; 409 if one of its questions has joined another active group, or it was dismissed) |
+| | `POST /team/question_groups/{group_id}/dismiss` | `dismiss_question_group` ("keep separate"; 409 on an active group) |
+| | `POST /team/question_groups/{group_id}/themes/synthesize` | `synthesize_themes` (**paid**, one call on `ai_review.model`; returns the `suggested` themes this run created, `[]` without a call when the group has no visible filed insight) |
+| | `POST /team/question_groups/{group_id}/themes` | `create_theme` (body `{name, definition, connection_ids}`; made by hand, so `accepted`; 422 for an insight that is not a visible filed insight of the group) |
+| | `PATCH /team/themes/{theme_id}` | `update_theme` (body `{name?, definition?}`; writes `rl_team_theme_revision` first) |
+| | `PUT /team/themes/{theme_id}/members` | `set_theme_members` (body `{connection_ids}`; replaces the members the viewer can see, after a revision; 422 as for create) |
+| | `POST /team/themes/{theme_id}/accept`, `POST /team/themes/{theme_id}/dismiss` | `accept_theme`, `dismiss_theme` (a status change; the row is kept) |
+| | `GET /team/themes/{theme_id}/history` | `get_theme_history` (revisions, newest first) |
 
 ## Highlights and questions
 
@@ -268,6 +287,114 @@ list). New rows are `suggested`, which is the status the Listen next list shows,
 gap's `ai_metadata` plus `origin: "question_gap"` and `question_gap_id`.
 `POST /question_gaps/{id}/dismiss` returns `{id, status}`.
 
+## Team
+
+Every route in `routers/team.py` builds a `TeamView` with `team.load_view` and reads only
+through `backend/app/services/team.py`. That module holds the access rule:
+
+- **Scope:** the conversations of the viewer's active workspace in `cortico_api` mode (from
+  the cached listing, `scope_conversations`; empty with no workspace), and every
+  conversation in `snapshot` mode.
+- **Visible rows:** a highlight or reflection whose conversation is in scope; an insight
+  whose reflection's conversation is in scope and whose status is `accepted` or `edited`; a
+  question that is not archived and either has a visible insight or highlight filed under it
+  (through question merges, and only rows by the question's own author) or belongs to one of
+  the workspace's projects (always, in snapshot mode).
+- **Text:** evidence and highlight text is returned only for snippets whose own conversation
+  is in scope, and conversation titles come from the scope, because the snippet and
+  conversation caches are shared by every user.
+- **Everything else answers 404**, like a row that does not exist. An insight id in a body
+  that is outside the scope answers 422, the same as one that does not exist.
+- Set-aside, suggested and merged insights, review drafts, the activity log, hear-next lines
+  and a user's own undecided AI suggestions are never returned.
+- A question group is visible to whoever can see one of its questions, and they see only
+  those questions and the insights under them. A theme is visible when it has no members or
+  the viewer can see at least one. Anyone who can see a group or theme may change it.
+
+Every teammate row carries `author: {user_id, name, is_you}`. The name is `display_name` of
+the user's newest `rl_session` row, or `Teammate <id>`; in snapshot mode the viewer is
+`You`. An email is never returned. All timestamps go through `iso_utc`.
+
+`GET /team`:
+
+```
+{ "people": [ { "user_id", "name", "is_you", "conversations_opened", "highlight_count",
+                "insight_count", "question_count", "reflection_count" } ],   // the viewer first
+  "questions": [ { "research_question_id", "name", "description", "author",
+                   "insight_count", "highlight_count", "conversation_count",
+                   "group_id": int | null, "adopted_by_you": bool } ],
+  "groups": [ { "id", "name", "status", "rationale", "created_by": author | null,
+                "question_ids": [int], "theme_count": int } ],   // active and suggested
+  "conversation_count": int }
+```
+
+- People are everyone with a visible highlight, reflection, insight or question, plus the
+  viewer. Counts cover the scope only. `conversations_opened` counts `rl_reading_state`
+  rows in scope; `reflection_count` counts reflections with status `ready_for_review` or
+  `filed`.
+- A question's `conversation_count` is the distinct conversations of its insights'
+  reflections and its highlights. `group_id` is the `active` group it is in; a `suggested`
+  group does not set it.
+- `question_ids` holds only the questions the viewer can see. `theme_count` counts the
+  visible `suggested` and `accepted` themes. `created_by` is null for a group the AI
+  suggested.
+
+`GET /team/questions/{rq_id}`:
+
+```
+{ "question": { ...as above... },
+  "insights": [ { "connection_id", "insight_text", "author", "conversation_id",
+                  "conversation_title", "voice_memo_id", "filed_at",
+                  "evidence": [ { "snippet_id", "conversation_id", "conversation_title",
+                                  "text", "start_index", "end_index" } ] } ],
+  "highlights": [ { "highlight_id", "author", "conversation_id", "conversation_title",
+                    "text", "notes", "starred" } ] }
+```
+
+`filed_at` is the insight's `updated_at`, because `reflection_connection` has no column for
+when it was filed. Evidence from a conversation outside the scope is left out of the list.
+
+`GET /team/people/{user_id}`:
+
+```
+{ "person": { ...as in people... },
+  "reflections": [ { "voice_memo_id", "conversation_id", "conversation_title", "recorded_at",
+                     "typed": bool, "text": str } ],     // newest first
+  "questions": [ ...as above... ] }
+```
+
+`GET /conversations/{conversation_id}/team_highlights`:
+
+```
+[ { "highlight_id", "author", "notes", "starred", "created_at", "question_names": [str],
+    "snippets": [ { "snippet_id", "start_index", "end_index" } ],
+    "cortico_id": int | null } ]
+```
+
+`cortico_id` is the highlight's synced copy in `rl_cortico_sync`, so the client can leave the
+same highlight out of the "In Cortico" layer.
+
+`GET /team/question_groups/{group_id}`:
+
+```
+{ "group": { ...as in groups... }, "questions": [ ...as above... ],
+  "insights": [ ...as in the question detail, for every visible member question... ],
+  "themes": [ { "id", "name", "definition", "status", "created_by": author | null,
+                "updated_by": author | null, "updated_at", "member_connection_ids": [int] } ] }
+```
+
+The group routes that change a group return the group object, the theme routes return the
+theme object, and the two paid routes return a list of the rows they created.
+`member_connection_ids` holds only insights the viewer can see, and
+`PUT /team/themes/{id}/members` leaves members outside the viewer's scope in place.
+
+`GET /team/themes/{theme_id}/history`:
+
+```
+[ { "id", "name", "definition", "member_connection_ids": [int], "edited_by": author,
+    "created_at" } ]     // the theme as it was before each edit, newest first
+```
+
 ## `GET /desk` shape
 
 `{keep_reading: [...], finish: [...], last_conversation: {...} | null}`, for the signed-in
@@ -349,11 +476,21 @@ lists every kind in `KINDS`, with its filter bucket, and its docstring says how 
 | `listening_line_accepted` | user | | `accept_listening_suggestion` | `listening_suggestion_id` |
 | `listening_line_dismissed` | user | set_aside | `dismiss_listening_suggestion` | `listening_suggestion_id` |
 | `gists_generated` | ai | | `gists.generate_missing` | `count` |
+| `question_adopted` | user | | `team.adopt_question` | `research_question_id` (the new one), `source_rq_id`, `source_user_id` |
+| `team_group_created` | user | | `team.create_group`, `team.accept_group` | `team_group_id`, `research_question_ids` |
+| `team_groups_suggested` | ai | | `team.suggest_groups` | `count`, `team_group_ids` |
+| `team_group_dismissed` | user | set_aside | `team.dismiss_group` | `team_group_id` |
+| `team_themes_suggested` | ai | | `team.synthesize_themes` | `team_group_id`, `count`, `team_theme_ids` |
+| `team_theme_accepted` | user | | `team.create_theme`, `team.decide_theme` | `team_theme_id`, `team_group_id` |
+| `team_theme_edited` | user | changed | `team.update_theme`, `team.set_theme_members` | `team_theme_id`, `team_group_id` |
+| `team_theme_dismissed` | user | set_aside | `team.decide_theme` | `team_theme_id`, `team_group_id` |
 
 Accepting a merge nudge writes the merge's own row (`rq_merged` or `insights_merged`), and
 `rq_reworded` when the suggested wording is applied.
 
-Not logged: unstarring, family renames, member changes and family merges, merge-suggestion
+Team rows are logged for the user who acted (or asked the AI), not for the teammates whose
+work is involved. Not logged: renaming a question group, adding or removing its questions,
+unstarring, family renames, member changes and family merges, merge-suggestion
 decisions, creating, editing or deleting a highlight, reorders, and workspace changes. A repeat of a decision that changes
 nothing (accepting an accepted next step) writes no row.
 
@@ -381,12 +518,14 @@ nothing (accepting an accepted next step) writes no row.
   `user.id`. In snapshot mode that is `config.default_user_id` (101) with no sign-in. In
   `cortico_api` mode it is the Cortico user behind the `nim_session` cookie (or
   `Authorization: Bearer <session token>`), and a request without one answers 401. A row
-  that belongs to another user answers 404 (`backend/app/ownership.py`).
+  that belongs to another user answers 404 (`backend/app/ownership.py`). The one exception
+  is the team router, which shows other users' rows through `services/team.py` and nothing
+  else (see "Team").
 - **Cortico reads** go through `Depends(get_source)`, never `models_cortico` (the two
   snapshot-mode listings in `routers/workspaces.py` are the exception).
 - **Timestamps** on the routes added 2026-11-18 (desk, reading position, review draft,
   listening interests, set aside, activity, question highlights, insight merges, merge
-  nudges, passage suggestions, gaps) are ISO 8601 with a `+00:00` offset
+  nudges, passage suggestions, gaps, team) are ISO 8601 with a `+00:00` offset
   (`app/timefmt.py`). Older routes return `isoformat()` of whatever the database gave,
   which has no offset on SQLite.
 - **Request bodies** are Pydantic models in `backend/app/schemas.py`. Responses are dicts
