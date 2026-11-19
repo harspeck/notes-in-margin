@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notes in the Margin, mock H: the desk by question</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Cortico brand book v08.2026: three primaries, five accents, four greys. Poppins only. */
+:root{
+  --black:#000000; --white:#FFFFFF; --blue:#00A4EB; --blue-tint:#B3E4F9;
+  --yellow:#FFC600; --yellow-tint:#FFF1BF; --red:#FF423A; --green:#007A33;
+  --g1:#E6E6E6; --g2:#B3B3B3; --g3:#808080; --g4:#333333;
+  --proto:48px; --app:57px;
+  --ease:cubic-bezier(.4,0,.2,1);
+  --font:Poppins,system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--white);color:var(--black);font:400 15px/1.5 var(--font);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;box-shadow:0 0 0 2px var(--black)}
+.proto :focus-visible{box-shadow:none}
+a{color:var(--black);text-decoration:underline;text-decoration-color:var(--blue);text-decoration-thickness:2px;text-underline-offset:3px}
+svg.i{width:1em;height:1em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.125em}
+svg.i.fill{fill:currentColor;stroke:none}
+h1,h2,h3{text-wrap:balance;margin:0}
+p{margin:0}
+ul,ol{margin:0;padding:0;list-style:none}
+
+/* prototype bar, not part of the app */
+.proto{position:sticky;top:0;z-index:60;height:var(--proto);background:var(--black);color:var(--white);display:flex;gap:8px;align-items:center;padding:0 16px;font-size:13px;overflow-x:auto;overflow-y:hidden;white-space:nowrap}
+.proto strong{margin-right:8px;font-weight:600}
+.proto button{flex:none;background:transparent;border:1px solid var(--g4);color:var(--white);border-radius:999px;height:32px;padding:0 16px;font-weight:500}
+.proto button:hover{border-color:var(--white)}
+.proto button[aria-pressed="true"]{background:var(--white);color:var(--black);border-color:var(--white)}
+.proto .spacer{flex:1;min-width:16px}
+.proto .notes-toggle[aria-pressed="true"]{background:var(--yellow);color:var(--black);border-color:var(--yellow);font-weight:600}
+.proto .sep{width:1px;height:20px;background:var(--g4);flex:none;margin:0 4px}
+
+.app{position:sticky;top:var(--proto);z-index:30;height:var(--app);background:var(--white);border-bottom:1px solid var(--g1);display:flex;align-items:center;gap:16px;padding:0 24px;overflow-x:auto}
+.brand{font-size:16px;font-weight:700;white-space:nowrap}
+.appnav{display:flex;align-items:center;gap:4px}
+.appnav span{height:36px;padding:0 14px;border-radius:999px;font-size:14px;font-weight:600;white-space:nowrap;display:inline-flex;align-items:center}
+.appnav span[aria-current="page"]{background:var(--black);color:var(--white)}
+.app .grow{flex:1}
+.ws{font-size:13px;font-weight:600;white-space:nowrap}
+.avatar{flex:none;width:36px;height:36px;border-radius:50%;background:var(--blue);display:grid;place-items:center;font-size:12px;font-weight:600}
+
+.btn{font:600 15px/1 var(--font);height:44px;padding:0 24px;border-radius:999px;border:2px solid var(--black);background:var(--black);color:var(--white);display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
+.btn.outline{background:transparent;color:var(--black)}
+.btn.quiet{background:transparent;border-color:transparent;color:var(--black);padding:0 12px}
+.btn.small{height:32px;padding:0 16px;font-size:13px}
+.tag{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap;flex:none}
+.tag.yours{background:var(--yellow)}
+.tag.ai{border:2px dashed var(--g3);background:var(--white)}
+.tag.team{background:var(--blue-tint)}
+.tag.when{background:var(--g1)}
+
+.wrap{max-width:1120px;margin:0 auto;padding:32px 32px 120px}
+.hello{font-size:13px;color:var(--g4);margin-bottom:8px}
+.grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:40px;align-items:start}
+.h2{font-size:13px;font-weight:600;letter-spacing:.02em;border-top:2px solid var(--black);padding-top:12px;margin-bottom:16px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.h2 small{font-weight:400;color:var(--g4);font-size:13px}
+section + section{margin-top:40px}
+
+
+.note{display:none;background:var(--yellow-tint);border-left:4px solid var(--yellow);padding:10px 12px;margin:12px 0 0;font-size:12px;line-height:1.45;border-radius:0 8px 8px 0}
+.note b{font-weight:600}
+body.notes .note{display:block}
+.bar{flex:none;width:96px;height:8px;border-radius:999px;background:var(--g1);overflow:hidden;display:inline-block}
+.bar i{display:block;height:100%;background:var(--black);border-radius:999px}
+.h1{font-weight:700;font-size:40px;line-height:1.2;letter-spacing:-.005em}
+.lede{font-size:16px;color:var(--g4);max-width:64ch;margin:8px 0 28px}
+.acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+.first{border:2px solid var(--black);border-radius:16px;padding:16px 20px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 20px;align-items:center;margin-bottom:32px;background:var(--yellow-tint)}
+.first .k{font-size:12px;font-weight:600;margin-bottom:2px}
+.first h2{font-size:18px;font-weight:600}
+.first p{font-size:13px;color:var(--g4)}
+.qcard{border-top:2px solid var(--black);padding:16px 0 28px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:16px 40px}
+.qcard h2{font-size:20px;font-weight:600;line-height:1.3}
+.qcard .state{margin-top:12px;font-size:13px;color:var(--g4);display:flex;flex-direction:column;gap:6px}
+.qcard .state .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.qcard .state b{color:var(--black);font-weight:600}
+.verdict{margin-top:12px;font-size:13px;font-weight:600}
+.verdict.ready{color:var(--green)}
+.moves h3{font-size:12px;font-weight:600;color:var(--g4);margin-bottom:8px}
+.move{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--g1)}
+.move:first-of-type{padding-top:0}
+.move .kind{width:84px;font-size:11px;font-weight:600;border-radius:999px;padding:3px 0;text-align:center;background:var(--g1)}
+.move .kind.decide{background:var(--yellow)}
+.move .kind.read{background:var(--blue-tint)}
+.move .kind.themes{background:var(--black);color:var(--white)}
+.move .kind.ai{background:var(--white);border:2px dashed var(--g3)}
+.move .t{font-size:14px;font-weight:600}
+.move .i{grid-column:2;font-size:12px;color:var(--g4)}
+.move .btn{grid-row:1/3;grid-column:3}
+.loose{margin-top:16px;border-top:2px solid var(--black);padding-top:12px}
+.loose > h2{font-size:13px;font-weight:600;margin-bottom:4px}
+.loose > p{font-size:13px;color:var(--g4);margin-bottom:12px}
+.jotbig{display:flex;gap:8px;margin:0 0 32px;max-width:640px}
+.jotbig div{flex:1;height:48px;border:2px solid var(--black);border-radius:999px;padding:0 20px;display:flex;align-items:center;color:var(--g3);min-width:0}
+.ideas{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:32px}
+.idea{border:2px dashed var(--g3);border-radius:12px;padding:14px;font-size:13px}
+.idea b{display:block;font-size:14px;margin-bottom:2px}
+.idea p{color:var(--g4);margin-bottom:10px}
+@media (max-width:820px){
+  .wrap{padding:24px 16px 96px}.h1{font-size:30px}
+  .qcard{grid-template-columns:minmax(0,1fr)}
+  .first{grid-template-columns:minmax(0,1fr)}
+  .move{grid-template-columns:auto minmax(0,1fr)}
+  .move .btn{grid-row:auto;grid-column:2;justify-self:start;margin-top:6px}
+}
+</style>
+</head>
+<body>
+<div class="proto" role="toolbar" aria-label="Prototype controls, not part of the app">
+  <strong>Mock H</strong>
+  <button data-state="three" aria-pressed="true">Three questions</button>
+  <button data-state="none" aria-pressed="false">No questions yet</button>
+  <span class="spacer"></span>
+  <button class="notes-toggle" id="notes" aria-pressed="false">Show why each piece is here</button>
+</div>
+<header class="app">
+  <span class="brand">Notes in the Margin</span>
+  <nav class="appnav" aria-label="Main">
+    <span aria-current="page">Desk</span><span>Questions</span><span>Codebook</span><span>Team</span>
+  </nav>
+  <span class="grow"></span>
+  <span class="ws">Riverbend listening, 2 projects</span>
+  <span class="avatar" aria-hidden="true">HS</span>
+</header>
+
+<main class="wrap" id="desk"></main>
+<script>
+const sparkle = '<svg class="i fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2l1.8 5.2L17 9l-5.2 1.8L10 16l-1.8-5.2L3 9l5.2-1.8L10 2zm8 11l.9 2.6 2.6.9-2.6.9L18 20l-.9-2.6-2.6-.9 2.6-.9L18 13z"/></svg>';
+const play = '<svg class="i fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>';
+
+const QUESTIONS = [
+  { name: "Who gets to decide when and where meetings happen?", heard: 6, of: 14, insights: 7, people: "You and Maya (5 more of theirs)", verdict: ["ready", "Enough to draw themes from."], thin: "Evening-shift workers",
+    moves: [
+      { kind: "decide", label: "Decide", t: "2 insights waiting from \u201cNight shift break room\u201d", i: "Reflected 3 days ago. They would add the first evening-shift voices here.", act: "Finish review", primary: true },
+      { kind: "themes", label: "Themes", t: "Draw themes with Maya", i: "12 filed insights between you, no themes yet. Suggestions are drafts you both edit.", act: "Open team codebook" },
+      { kind: "read", label: "Listen", t: "Pick up \u201cTuesday evening at the library\u201d", i: "Stopped at 24:10 of 42:00. 2 of your 5 highlights there sit under this question.", act: play + " Pick up" },
+    ]},
+  { name: "Where do newcomers first feel known?", heard: 3, of: 14, insights: 4, people: "You", verdict: ["", "Building. Three more conversations would make it solid."],
+    moves: [
+      { kind: "read", label: "Reflect", t: "Reflect on \u201cThe laundromat on Fourth\u201d", i: "Finished 2 days ago with 7 highlights, 3 of them about being recognised.", act: "Reflect" },
+      { kind: "ai", label: sparkle + " Find", t: "Find more passages for this question", i: "The AI reads up to 3 conversations you have not opened and offers passages. One click, one paid run.", act: "Find passages" },
+    ]},
+  { name: "What makes people stop coming?", heard: 1, of: 14, insights: 1, people: "You", verdict: ["", "Thin. One conversation is one person's story."],
+    moves: [
+      { kind: "read", label: "Listen", t: "Read \u201cSaturday at the market\u201d", i: "Recommended: vendors describe going once and not returning. 35 min. Maya has read it.", act: "Open it" },
+      { kind: "ai", label: sparkle + " Line", t: "Keep the line \u201cHear from people who came once and did not return\u201d", i: "Offered from this question. Keeping it steers what gets recommended.", act: "Keep" },
+    ]},
+];
+const STATES = {
+  three: { lede: "Each question, what you have heard so far, and what would move it forward. The actions are the same as ever. They are sorted by what they serve.", questions: QUESTIONS,
+    first: { t: "Decide on 2 insights from \u201cNight shift break room\u201d", i: "It has waited 3 days and it serves your strongest question.", act: "Finish review" },
+    loose: [
+      { kind: "read", label: "Listen", t: "\u201cCoffee after the service\u201d is open with no highlights", i: "Stopped at 9:30 of 51:00. Nothing in it has spoken to a question yet.", act: play + " Pick up" },
+      { kind: "decide", label: "Place", t: "1 starred highlight has no question", i: "\u201cWe only hear about it after it is decided.\u201d From Night shift break room.", act: "Place it" },
+    ]},
+  none: { lede: "The desk is organised around what you are listening for. Start with one question. It is scratch paper, not a plan.", questions: [],
+    ideas: [
+      { t: "What would make it easier to show up?", r: "From the Riverbend East conversation guide." },
+      { t: "Who do you turn to when something goes wrong?", r: "From the Riverbend West conversation guide." },
+      { t: "Who gets to decide when meetings happen?", r: "Maya is asking this. Sharing a question lets your insights sit together." },
+    ],
+    loose: [
+      { kind: "read", label: "Listen", t: "Or just start with \u201cTuesday evening at the library\u201d", i: "42 min. Add a question when something catches you. Highlights can be placed under it later.", act: "Open it" },
+    ]},
+};
+const move = (m) => `<div class="move"><span class="kind ${m.kind}">${m.label}</span><span class="t">${m.t}</span>
+  <button class="btn small${m.primary ? "" : " outline"}">${m.act}</button><span class="i">${m.i}</span></div>`;
+
+function render(key) {
+  const s = STATES[key];
+  const qs = s.questions.map((q) => `<article class="qcard">
+      <div>
+        <h2>${q.name}</h2>
+        <div class="state">
+          <span class="row"><span class="bar" role="img" aria-label="Heard in ${q.heard} of ${q.of}"><i style="width:${Math.round(q.heard / q.of * 100)}%"></i></span><span>Heard in <b>${q.heard} of ${q.of}</b> conversations</span></span>
+          <span><b>${q.insights}</b> filed ${q.insights === 1 ? "insight" : "insights"} \u00b7 ${q.people}</span>
+          ${q.thin ? `<span>Still thin on: <b>${q.thin}</b></span>` : ""}
+        </div>
+        <p class="verdict ${q.verdict[0]}">${q.verdict[1]}</p>
+      </div>
+      <div class="moves"><h3>What would move this forward</h3>${q.moves.map(move).join("")}</div>
+    </article>`).join("");
+  document.getElementById("desk").innerHTML = `
+    <h1 class="h1">what you are listening for</h1>
+    <p class="lede">${s.lede}</p>
+    ${s.first ? `<div class="first"><div><p class="k">If you do one thing</p><h2>${s.first.t}</h2><p>${s.first.i}</p></div><button class="btn">${s.first.act}</button></div>
+      <p class="note" style="margin:-20px 0 28px"><b>One suggested start</b> survives from mock F, as a slim banner. It is the oldest waiting decision, and it names the question it serves.</p>` : ""}
+    <div class="jotbig"><div>Jot a question\u2026</div><button class="btn">Add</button></div>
+    ${s.ideas ? `<div class="ideas">${s.ideas.map((i) => `<div class="idea"><b>${i.t}</b><p>${i.r}</p><button class="btn small">Use this</button></div>`).join("")}</div>
+      <p class="note" style="margin:-20px 0 28px"><b>When:</b> only with no questions. <b>Info needed:</b> where each idea comes from, including a teammate's question you could share.</p>` : ""}
+    ${qs}
+    ${s.questions.length ? `<p class="note"><b>Left side, the info:</b> how widely the question has been heard, how much is filed, who else is on it, and where it is thin, ending in a plain verdict. <b>Right side, the actions:</b> at most three, each tagged by kind (Decide, Reflect, Listen, Themes, or an AI lever) with the facts that tie it to this question. <b>When:</b> an action appears under a question once it would add to that question.</p>` : ""}
+    <section class="loose" aria-labelledby="l-h">
+      <h2 id="l-h">${s.questions.length ? "Not tied to a question yet" : "Prefer to listen first?"}</h2>
+      <p>${s.questions.length ? "Work that has not found its question. It is fine for some to stay here." : "You do not need a question to begin."}</p>
+      ${s.loose.map(move).join("")}
+      <p class="note"><b>Why this section exists:</b> not everything serves a question, and hiding it would lose work. An open conversation with no highlights and a starred highlight with no home both wait here.</p>
+    </section>`;
+}
+
+const buttons = [...document.querySelectorAll("[data-state]")];
+function show(key) {
+  buttons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.state === key)));
+  render(key);
+  window.scrollTo(0, 0);
+}
+buttons.forEach((b) => b.addEventListener("click", () => show(b.dataset.state)));
+const notes = document.getElementById("notes");
+notes.addEventListener("click", () => {
+  const on = document.body.classList.toggle("notes");
+  notes.setAttribute("aria-pressed", String(on));
+});
+const params = new URLSearchParams(location.search);
+show(params.get("s") || buttons[0].dataset.state);
+if (params.get("notes")) notes.click();
+</script>
+</body>
+</html>

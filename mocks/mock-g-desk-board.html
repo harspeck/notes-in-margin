@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notes in the Margin, mock G: the desk as a board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Cortico brand book v08.2026: three primaries, five accents, four greys. Poppins only. */
+:root{
+  --black:#000000; --white:#FFFFFF; --blue:#00A4EB; --blue-tint:#B3E4F9;
+  --yellow:#FFC600; --yellow-tint:#FFF1BF; --red:#FF423A; --green:#007A33;
+  --g1:#E6E6E6; --g2:#B3B3B3; --g3:#808080; --g4:#333333;
+  --proto:48px; --app:57px;
+  --ease:cubic-bezier(.4,0,.2,1);
+  --font:Poppins,system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--white);color:var(--black);font:400 15px/1.5 var(--font);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;box-shadow:0 0 0 2px var(--black)}
+.proto :focus-visible{box-shadow:none}
+a{color:var(--black);text-decoration:underline;text-decoration-color:var(--blue);text-decoration-thickness:2px;text-underline-offset:3px}
+svg.i{width:1em;height:1em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.125em}
+svg.i.fill{fill:currentColor;stroke:none}
+h1,h2,h3{text-wrap:balance;margin:0}
+p{margin:0}
+ul,ol{margin:0;padding:0;list-style:none}
+
+/* prototype bar, not part of the app */
+.proto{position:sticky;top:0;z-index:60;height:var(--proto);background:var(--black);color:var(--white);display:flex;gap:8px;align-items:center;padding:0 16px;font-size:13px;overflow-x:auto;overflow-y:hidden;white-space:nowrap}
+.proto strong{margin-right:8px;font-weight:600}
+.proto button{flex:none;background:transparent;border:1px solid var(--g4);color:var(--white);border-radius:999px;height:32px;padding:0 16px;font-weight:500}
+.proto button:hover{border-color:var(--white)}
+.proto button[aria-pressed="true"]{background:var(--white);color:var(--black);border-color:var(--white)}
+.proto .spacer{flex:1;min-width:16px}
+.proto .notes-toggle[aria-pressed="true"]{background:var(--yellow);color:var(--black);border-color:var(--yellow);font-weight:600}
+.proto .sep{width:1px;height:20px;background:var(--g4);flex:none;margin:0 4px}
+
+.app{position:sticky;top:var(--proto);z-index:30;height:var(--app);background:var(--white);border-bottom:1px solid var(--g1);display:flex;align-items:center;gap:16px;padding:0 24px;overflow-x:auto}
+.brand{font-size:16px;font-weight:700;white-space:nowrap}
+.appnav{display:flex;align-items:center;gap:4px}
+.appnav span{height:36px;padding:0 14px;border-radius:999px;font-size:14px;font-weight:600;white-space:nowrap;display:inline-flex;align-items:center}
+.appnav span[aria-current="page"]{background:var(--black);color:var(--white)}
+.app .grow{flex:1}
+.ws{font-size:13px;font-weight:600;white-space:nowrap}
+.avatar{flex:none;width:36px;height:36px;border-radius:50%;background:var(--blue);display:grid;place-items:center;font-size:12px;font-weight:600}
+
+.btn{font:600 15px/1 var(--font);height:44px;padding:0 24px;border-radius:999px;border:2px solid var(--black);background:var(--black);color:var(--white);display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
+.btn.outline{background:transparent;color:var(--black)}
+.btn.quiet{background:transparent;border-color:transparent;color:var(--black);padding:0 12px}
+.btn.small{height:32px;padding:0 16px;font-size:13px}
+.tag{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap;flex:none}
+.tag.yours{background:var(--yellow)}
+.tag.ai{border:2px dashed var(--g3);background:var(--white)}
+.tag.team{background:var(--blue-tint)}
+.tag.when{background:var(--g1)}
+
+.wrap{max-width:1120px;margin:0 auto;padding:32px 32px 120px}
+.hello{font-size:13px;color:var(--g4);margin-bottom:8px}
+.grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:40px;align-items:start}
+.h2{font-size:13px;font-weight:600;letter-spacing:.02em;border-top:2px solid var(--black);padding-top:12px;margin-bottom:16px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.h2 small{font-weight:400;color:var(--g4);font-size:13px}
+section + section{margin-top:40px}
+
+
+.note{display:none;background:var(--yellow-tint);border-left:4px solid var(--yellow);padding:10px 12px;margin:12px 0 0;font-size:12px;line-height:1.45;border-radius:0 8px 8px 0}
+.note b{font-weight:600}
+body.notes .note{display:block}
+.bar{flex:none;width:96px;height:8px;border-radius:999px;background:var(--g1);overflow:hidden;display:inline-block}
+.bar i{display:block;height:100%;background:var(--black);border-radius:999px}
+.h1{font-weight:700;font-size:40px;line-height:1.2;letter-spacing:-.005em}
+.lede{font-size:16px;color:var(--g4);max-width:64ch;margin:8px 0 28px}
+.acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* board */
+.upnext{border:2px dashed var(--g3);border-radius:16px;padding:16px 20px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 20px;align-items:center;margin-bottom:28px}
+.upnext h2{font-size:18px;font-weight:600}
+.upnext p{font-size:13px;color:var(--g4)}
+.upnext .k{font-size:12px;font-weight:600;display:flex;gap:6px;align-items:center;margin-bottom:4px}
+.board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:start}
+.board .col{background:var(--white);border-top:2px solid var(--black);padding-top:12px;min-width:0;margin-top:0}
+.col > h2{font-size:13px;font-weight:600;display:flex;gap:8px;align-items:baseline}
+.col > h2 .n{font-weight:400;color:var(--g4)}
+.col > .what{font-size:12px;color:var(--g4);margin:2px 0 14px;min-height:36px}
+.card{border:1px solid var(--g2);border-radius:12px;padding:14px;margin-bottom:10px;position:relative}
+.card.first{border:2px solid var(--black)}
+.card h3{font-size:14px;font-weight:600;line-height:1.35}
+.card .f{font-size:12px;color:var(--g4);margin-top:6px;display:flex;flex-direction:column;gap:3px}
+.card .f b{color:var(--black);font-weight:600}
+.card .qs{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
+.card .qs span{font-size:11px;font-weight:600;background:var(--g1);border-radius:999px;padding:2px 8px}
+.card .acts{margin-top:12px}
+.card .prog{height:6px;border-radius:999px;background:var(--g1);overflow:hidden;margin-top:10px}
+.card .prog i{display:block;height:100%;background:var(--blue)}
+.card .flag{margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap}
+.empty{border:1px dashed var(--g2);border-radius:12px;padding:14px;font-size:12px;color:var(--g4)}
+.arrow{font-size:11px;font-weight:600;color:var(--g3);margin:0 0 10px;display:flex;align-items:center;gap:6px}
+.arrow::after{content:"";flex:1;height:1px;background:var(--g1)}
+.strip{margin-top:40px;border-top:2px solid var(--black);padding-top:12px}
+.strip h2{font-size:13px;font-weight:600;margin-bottom:12px}
+.qrow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px 16px;align-items:center;padding:10px 0;border-bottom:1px solid var(--g1);font-size:13px}
+.qrow b{font-weight:600;font-size:14px}
+.qrow .m{color:var(--g4);font-size:12px;display:flex;gap:8px;align-items:center;white-space:nowrap}
+.qrow .ready{color:var(--green);font-weight:600;font-size:12px}
+@media (max-width:1000px){.board{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){
+  .wrap{padding:24px 16px 96px}.h1{font-size:30px}
+  .board{grid-template-columns:minmax(0,1fr)}.col > .what{min-height:0}
+  .upnext{grid-template-columns:minmax(0,1fr)}
+  .qrow{grid-template-columns:minmax(0,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="proto" role="toolbar" aria-label="Prototype controls, not part of the app">
+  <strong>Mock G</strong>
+  <button data-state="busy" aria-pressed="true">A busy week</button>
+  <button data-state="first" aria-pressed="false">First visit</button>
+  <span class="spacer"></span>
+  <button class="notes-toggle" id="notes" aria-pressed="false">Show why each piece is here</button>
+</div>
+<header class="app">
+  <span class="brand">Notes in the Margin</span>
+  <nav class="appnav" aria-label="Main">
+    <span aria-current="page">Desk</span><span>Questions</span><span>Codebook</span><span>Team</span>
+  </nav>
+  <span class="grow"></span>
+  <span class="ws">Riverbend listening, 2 projects</span>
+  <span class="avatar" aria-hidden="true">HS</span>
+</header>
+
+<main class="wrap" id="desk"></main>
+<script>
+const sparkle = '<svg class="i fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2l1.8 5.2L17 9l-5.2 1.8L10 16l-1.8-5.2L3 9l5.2-1.8L10 2zm8 11l.9 2.6 2.6.9-2.6.9L18 20l-.9-2.6-2.6-.9 2.6-.9L18 13z"/></svg>';
+const play = '<svg class="i fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>';
+
+const STATES = {
+  busy: {
+    lede: "Every conversation you have touched, by where it stands. Work moves left to right. The outlined card has waited longest.",
+    up: { title: "\u201cSaturday at the market\u201d", why: "Recommended because \u201cWhat makes people stop coming?\u201d has been heard in only 1 of 14. 35 min. Maya has read it.", },
+    cols: [
+      { name: "Listening", what: "Open and unfinished. Pick one up, or reflect on what you have.", cards: [
+        { title: "Tuesday evening at the library", facts: ["Stopped at <b>24:10 of 42:00</b>, yesterday", "<b>5 highlights</b>, 2 starred"], qs: ["Who decides", "Newcomers"], prog: 57, acts: [play + " Pick up", "Reflect"] },
+        { title: "Coffee after the service", facts: ["Stopped at <b>9:30 of 51:00</b>, last week", "No highlights yet"], qs: [], prog: 19, acts: [play + " Pick up"] },
+      ]},
+      { name: "To reflect", what: "Finished, with highlights and no reflection yet. A few sentences is enough.", cards: [
+        { title: "The laundromat on Fourth", facts: ["Finished <b>2 days ago</b>", "<b>7 highlights</b>, 3 starred", "Last highlight: \u201cNobody asked us what time works.\u201d"], qs: ["Who decides"], acts: ["Reflect"] },
+      ]},
+      { name: "To decide", what: "The AI connected your reflection to your questions. Nothing is filed until you decide.", cards: [
+        { first: true, flag: ['<span class="tag yours">Waiting longest</span>'], title: "Night shift break room", facts: ["Reflected <b>3 days ago</b>", "<b>4 insights</b> to decide, 1 already kept", "1 starred highlight not placed"], qs: ["Who decides", "Stop coming"], acts: ["Finish review"] },
+      ]},
+      { name: "In your memo", what: "Filed. Shown for a week, so you can see what a sitting produced.", cards: [
+        { title: "Front porch on Elm", facts: ["Filed <b>Monday</b>", "<b>3 insights</b> under 2 questions", "Dev filed 2 from the same conversation"], qs: ["Newcomers", "Who decides"], acts: ["See them"] },
+      ]},
+    ],
+    questions: [
+      { name: "Who gets to decide when and where meetings happen?", heard: 6, of: 14, insights: 7, ready: "Enough to draw themes, with Maya's 5", act: "Open team codebook" },
+      { name: "Where do newcomers first feel known?", heard: 3, of: 14, insights: 4 },
+      { name: "What makes people stop coming?", heard: 1, of: 14, insights: 1, thin: true },
+    ],
+  },
+  first: {
+    lede: "Conversations will move across these four columns as you work. Start by listening to one.",
+    up: { title: "\u201cTuesday evening at the library\u201d", why: "A good first one: 42 min, and the conversation most of your team has read.", guide: true },
+    cols: [
+      { name: "Listening", what: "Open and unfinished.", empty: "Conversations you open land here, with your place kept." },
+      { name: "To reflect", what: "Finished, no reflection yet.", empty: "When you finish one with highlights, it waits here for a few sentences from you." },
+      { name: "To decide", what: "Insights waiting on you.", empty: "After you reflect, the AI suggests insights. You keep, edit or set aside each one here." },
+      { name: "In your memo", what: "Filed this week.", empty: "What you file shows here, and to your team." },
+    ],
+    questions: [],
+  },
+};
+
+function render(key) {
+  const s = STATES[key];
+  const cols = s.cols.map((c, i) => `<section class="col" aria-label="${c.name}">
+      <h2>${c.name} <span class="n">${c.cards ? c.cards.length : 0}</span></h2>
+      <p class="what">${c.what}</p>
+      ${c.cards ? c.cards.map((k) => `<article class="card${k.first ? " first" : ""}">
+          ${k.flag ? `<div class="flag">${k.flag.join("")}</div>` : ""}
+          <h3>${k.title}</h3>
+          <div class="f">${k.facts.map((f) => `<span>${f}</span>`).join("")}</div>
+          ${k.prog ? `<div class="prog" role="img" aria-label="${k.prog}% heard"><i style="width:${k.prog}%"></i></div>` : ""}
+          ${k.qs.length ? `<div class="qs">${k.qs.map((q) => `<span>${q}</span>`).join("")}</div>` : ""}
+          <div class="acts">${k.acts.map((a, j) => `<button class="btn small${j || !k.first && i === 3 ? " outline" : ""}">${a}</button>`).join("")}</div>
+        </article>`).join("") : `<p class="empty">${c.empty}</p>`}
+    </section>`).join("");
+  const questions = s.questions.length ? s.questions.map((q) => `<div class="qrow"><b>${q.name}</b>
+      <span class="m"><span class="bar" role="img" aria-label="Heard in ${q.heard} of ${q.of}"><i style="width:${Math.round(q.heard / q.of * 100)}%"></i></span>Heard in ${q.heard} of ${q.of} \u00b7 ${q.insights} ${q.insights === 1 ? "insight" : "insights"}</span>
+      <span>${q.ready ? `<span class="ready">${q.ready}</span> <button class="btn small outline" style="margin-left:8px">${q.act}</button>` : q.thin ? '<span class="m">Thin so far</span>' : ""}</span></div>`).join("")
+    : '<p style="font-size:13px;color:var(--g4)">No questions yet. <a href="#">Jot one down</a>, or start listening and add one when something catches you.</p>';
+  document.getElementById("desk").innerHTML = `
+    <h1 class="h1">your desk</h1>
+    <p class="lede">${s.lede}</p>
+    <div class="upnext">
+      <div><p class="k">${sparkle} Up next, when you want something new</p><h2>${s.up.title}</h2><p>${s.up.why}</p></div>
+      <div class="acts"><button class="btn${key === "first" ? "" : " outline"}">Open it</button><button class="btn quiet">Not this one</button></div>
+    </div>
+    <p class="note"><b>Up next sits above the board, not in it,</b> because a recommendation is an offer and the board is your own work. <b>Info needed:</b> why this one, its length, and whether a teammate has read it.</p>
+    <div class="board">${cols}</div>
+    <p class="note"><b>The actions:</b> Pick up (Listening), Reflect (Listening or To reflect), Finish review (To decide). <b>When:</b> a card's column is its when. <b>Info needed:</b> each card carries the facts for its own step: place and highlights for listening, last highlight for reflecting, counts and age for deciding. The outlined card is the one that has waited longest, so there is still a single suggested start.</p>
+    <section class="strip" aria-labelledby="q-h">
+      <h2 id="q-h">What you are listening for</h2>
+      ${questions}
+      <p class="note"><b>Questions run under the board</b> because they cut across conversations. Drawing themes is offered on a question, not on a card, once it has enough filed insights.</p>
+    </section>`;
+}
+
+const buttons = [...document.querySelectorAll("[data-state]")];
+function show(key) {
+  buttons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.state === key)));
+  render(key);
+  window.scrollTo(0, 0);
+}
+buttons.forEach((b) => b.addEventListener("click", () => show(b.dataset.state)));
+const notes = document.getElementById("notes");
+notes.addEventListener("click", () => {
+  const on = document.body.classList.toggle("notes");
+  notes.setAttribute("aria-pressed", String(on));
+});
+const params = new URLSearchParams(location.search);
+show(params.get("s") || buttons[0].dataset.state);
+if (params.get("notes")) notes.click();
+</script>
+</body>
+</html>

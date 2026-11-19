@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notes in the Margin, mock F: the desk as one next step</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Cortico brand book v08.2026: three primaries, five accents, four greys. Poppins only. */
+:root{
+  --black:#000000; --white:#FFFFFF; --blue:#00A4EB; --blue-tint:#B3E4F9;
+  --yellow:#FFC600; --yellow-tint:#FFF1BF; --red:#FF423A; --green:#007A33;
+  --g1:#E6E6E6; --g2:#B3B3B3; --g3:#808080; --g4:#333333;
+  --proto:48px; --app:57px;
+  --ease:cubic-bezier(.4,0,.2,1);
+  --font:Poppins,system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--white);color:var(--black);font:400 15px/1.5 var(--font);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px;box-shadow:0 0 0 2px var(--black)}
+.proto :focus-visible{box-shadow:none}
+a{color:var(--black);text-decoration:underline;text-decoration-color:var(--blue);text-decoration-thickness:2px;text-underline-offset:3px}
+svg.i{width:1em;height:1em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.125em}
+svg.i.fill{fill:currentColor;stroke:none}
+h1,h2,h3{text-wrap:balance;margin:0}
+p{margin:0}
+ul,ol{margin:0;padding:0;list-style:none}
+
+/* prototype bar, not part of the app */
+.proto{position:sticky;top:0;z-index:60;height:var(--proto);background:var(--black);color:var(--white);display:flex;gap:8px;align-items:center;padding:0 16px;font-size:13px;overflow-x:auto;overflow-y:hidden;white-space:nowrap}
+.proto strong{margin-right:8px;font-weight:600}
+.proto button{flex:none;background:transparent;border:1px solid var(--g4);color:var(--white);border-radius:999px;height:32px;padding:0 16px;font-weight:500}
+.proto button:hover{border-color:var(--white)}
+.proto button[aria-pressed="true"]{background:var(--white);color:var(--black);border-color:var(--white)}
+.proto .spacer{flex:1;min-width:16px}
+.proto .notes-toggle[aria-pressed="true"]{background:var(--yellow);color:var(--black);border-color:var(--yellow);font-weight:600}
+.proto .sep{width:1px;height:20px;background:var(--g4);flex:none;margin:0 4px}
+
+.app{position:sticky;top:var(--proto);z-index:30;height:var(--app);background:var(--white);border-bottom:1px solid var(--g1);display:flex;align-items:center;gap:16px;padding:0 24px;overflow-x:auto}
+.brand{font-size:16px;font-weight:700;white-space:nowrap}
+.appnav{display:flex;align-items:center;gap:4px}
+.appnav span{height:36px;padding:0 14px;border-radius:999px;font-size:14px;font-weight:600;white-space:nowrap;display:inline-flex;align-items:center}
+.appnav span[aria-current="page"]{background:var(--black);color:var(--white)}
+.app .grow{flex:1}
+.ws{font-size:13px;font-weight:600;white-space:nowrap}
+.avatar{flex:none;width:36px;height:36px;border-radius:50%;background:var(--blue);display:grid;place-items:center;font-size:12px;font-weight:600}
+
+.btn{font:600 15px/1 var(--font);height:44px;padding:0 24px;border-radius:999px;border:2px solid var(--black);background:var(--black);color:var(--white);display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
+.btn.outline{background:transparent;color:var(--black)}
+.btn.quiet{background:transparent;border-color:transparent;color:var(--black);padding:0 12px}
+.btn.small{height:32px;padding:0 16px;font-size:13px}
+.tag{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap;flex:none}
+.tag.yours{background:var(--yellow)}
+.tag.ai{border:2px dashed var(--g3);background:var(--white)}
+.tag.team{background:var(--blue-tint)}
+.tag.when{background:var(--g1)}
+
+.wrap{max-width:1120px;margin:0 auto;padding:32px 32px 120px}
+.hello{font-size:13px;color:var(--g4);margin-bottom:8px}
+.grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:40px;align-items:start}
+.h2{font-size:13px;font-weight:600;letter-spacing:.02em;border-top:2px solid var(--black);padding-top:12px;margin-bottom:16px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.h2 small{font-weight:400;color:var(--g4);font-size:13px}
+section + section{margin-top:40px}
+
+/* Now: the one step */
+.now{border:2px solid var(--black);border-radius:16px;padding:28px;position:relative}
+.now .step{font-size:12px;font-weight:600;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.now h1{font-weight:700;font-size:32px;line-height:1.2;letter-spacing:-.005em}
+.now .why{margin-top:8px;font-size:16px;color:var(--g4);max-width:60ch}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0;margin:24px 0;border-top:1px solid var(--g1);border-bottom:1px solid var(--g1)}
+.facts div{padding:14px 16px 14px 0}
+.facts dt{font-size:12px;color:var(--g4)}
+.facts dd{margin:2px 0 0;font-weight:600;font-size:15px}
+.quote{border-left:4px solid var(--yellow);padding:4px 0 4px 16px;margin:0 0 24px;font-size:15px}
+.quote cite{display:block;font-style:normal;font-size:12px;color:var(--g4);margin-top:4px}
+.acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.now .also{margin-top:16px;font-size:13px;color:var(--g4)}
+
+/* the loop: where you are */
+.loop{display:flex;gap:0;margin:0 0 24px;font-size:12px;font-weight:600;flex-wrap:wrap}
+.loop li{display:flex;align-items:center;gap:8px;padding:6px 14px 6px 0;color:var(--g3)}
+.loop li::before{content:"";width:12px;height:12px;border-radius:50%;border:2px solid var(--g2);flex:none}
+.loop li.done{color:var(--black)}
+.loop li.done::before{background:var(--black);border-color:var(--black)}
+.loop li.here{color:var(--black)}
+.loop li.here::before{background:var(--blue);border-color:var(--black)}
+
+/* After that */
+.queue li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;align-items:center;padding:16px 0;border-bottom:1px solid var(--g1)}
+.queue li:first-child{padding-top:0}
+.queue h3{font-size:16px;font-weight:600}
+.queue .info{font-size:13px;color:var(--g4);margin-top:2px}
+.queue .when{grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* Questions with a breadth bar */
+.q{padding:14px 0;border-bottom:1px solid var(--g1)}
+.q:first-child{padding-top:0}
+.q h3{font-size:14px;font-weight:600;line-height:1.35}
+.q .meta{display:flex;gap:10px;align-items:center;margin-top:8px;font-size:12px;color:var(--g4);flex-wrap:wrap}
+.bar{flex:none;width:96px;height:8px;border-radius:999px;background:var(--g1);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--black);border-radius:999px}
+.q .nudge{margin-top:8px;font-size:12px;font-weight:600;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.q .nudge.ready{color:var(--green)}
+.jot{display:flex;gap:8px;margin-top:16px}
+.jot div{flex:1;height:40px;border:2px solid var(--g2);border-radius:999px;padding:0 16px;display:flex;align-items:center;font-size:13px;color:var(--g3);min-width:0}
+
+/* AI offers and team */
+.offer{border:2px dashed var(--g3);border-radius:12px;padding:12px 14px;margin-bottom:8px;font-size:13px}
+.offer .t{font-weight:600;font-size:14px}
+.offer .r{color:var(--g4);margin:2px 0 8px}
+.teamline{font-size:13px;padding:10px 0;border-bottom:1px solid var(--g1)}
+.teamline:first-child{padding-top:0}
+.teamline b{font-weight:600}
+.teamline .t{color:var(--g4);font-size:12px}
+
+/* annotations: why each piece is here */
+.note{display:none;background:var(--yellow-tint);border-left:4px solid var(--yellow);padding:10px 12px;margin:12px 0 0;font-size:12px;line-height:1.45;border-radius:0 8px 8px 0}
+.note b{font-weight:600}
+body.notes .note{display:block}
+
+/* the action map */
+.map{width:100%;border-collapse:collapse;font-size:13px}
+.map th{font-size:12px;font-weight:600;text-align:left;padding:10px 12px 10px 0;border-bottom:2px solid var(--black);vertical-align:bottom}
+.map td{padding:14px 12px 14px 0;border-bottom:1px solid var(--g1);vertical-align:top}
+.map td:first-child{font-weight:600;font-size:14px;min-width:160px}
+.map .order{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--black);color:var(--white);font-size:11px;font-weight:600;margin-right:8px}
+.maplede{font-size:16px;color:var(--g4);max-width:70ch;margin:8px 0 28px}
+.scroll{overflow-x:auto}
+.h1{font-weight:700;font-size:40px;line-height:1.2}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:32px}
+.rules div{border:2px solid var(--black);border-radius:12px;padding:16px;font-size:13px}
+.rules b{display:block;font-size:14px;margin-bottom:4px}
+
+@media (max-width:900px){
+  .wrap{padding:24px 16px 96px}
+  .grid{grid-template-columns:minmax(0,1fr);gap:32px}
+  .now{padding:20px}
+  .now h1{font-size:26px}
+  .h1{font-size:30px}
+  .map,.map tbody,.map tr,.map td{display:block}
+  .map thead{display:none}
+  .map tr{padding:16px 0;border-bottom:1px solid var(--g1)}
+  .map td{border:0;padding:2px 0}
+  .map td[data-l]::before{content:attr(data-l);display:block;font-size:11px;font-weight:600;color:var(--g4);margin-top:8px}
+}
+</style>
+</head>
+<body>
+
+<div class="proto" role="toolbar" aria-label="Prototype controls, not part of the app">
+  <strong>Mock F</strong>
+  <button data-state="first" aria-pressed="false">First visit</button>
+  <button data-state="reading" aria-pressed="true">Mid-conversation</button>
+  <button data-state="decide" aria-pressed="false">Decisions waiting</button>
+  <button data-state="caught" aria-pressed="false">Caught up</button>
+  <button data-state="build" aria-pressed="false">Ready for themes</button>
+  <span class="sep"></span>
+  <button data-view="map" aria-pressed="false">Action map</button>
+  <span class="spacer"></span>
+  <button class="notes-toggle" id="notes" aria-pressed="false">Show why each piece is here</button>
+</div>
+
+<header class="app">
+  <span class="brand">Notes in the Margin</span>
+  <nav class="appnav" aria-label="Main">
+    <span aria-current="page">Desk</span><span>Questions</span><span>Codebook</span><span>Team</span>
+  </nav>
+  <span class="grow"></span>
+  <span class="ws">Riverbend listening, 2 projects</span>
+  <span class="avatar" aria-hidden="true">HS</span>
+</header>
+
+<main class="wrap" id="desk"></main>
+
+<main class="wrap" id="map" hidden>
+  <h1 class="h1">every action, when it shows, and what you need to take it</h1>
+  <p class="maplede">The desk shows one of these as the next step and queues the rest. The order below is the order the desk picks from: the first row whose "when" is true wins the top card.</p>
+  <div class="scroll">
+  <table class="map">
+    <thead><tr><th>Action</th><th>When the desk offers it</th><th>What you need to know to take it</th><th>Where it leads</th></tr></thead>
+    <tbody>
+      <tr><td><span class="order">1</span>Decide on insights</td>
+        <td data-l="When">A reflection has been connected to your questions and insights are undecided. This goes first because the conversation fades from memory fastest.</td>
+        <td data-l="You need">How many insights, which reflection and conversation, how long ago, which questions they touch, and that nothing reaches your memo until you file.</td>
+        <td data-l="Leads to">Review, then straight to a recommended next conversation.</td></tr>
+      <tr><td><span class="order">2</span>Reflect on what you heard</td>
+        <td data-l="When">You have highlights on a conversation and no reflection yet, and you stopped reading more than a few minutes ago or reached the end.</td>
+        <td data-l="You need">How many highlights and stars, your last highlighted passage, and how long it takes (a few sentences is enough).</td>
+        <td data-l="Leads to">The notebook, typed or spoken, then the AI connects it to your questions.</td></tr>
+      <tr><td><span class="order">3</span>Pick up where you left off</td>
+        <td data-l="When">A conversation is open and unfinished.</td>
+        <td data-l="You need">Title and project, where you stopped and how much is left, highlights so far, and which of your questions it has spoken to.</td>
+        <td data-l="Leads to">The reader at your saved place, audio at the same time.</td></tr>
+      <tr><td><span class="order">4</span>Draw themes from a question</td>
+        <td data-l="When">A question has about five or more filed insights from three or more conversations and no themes yet, or a teammate's matching question does.</td>
+        <td data-l="You need">Insight count, how many conversations and people they come from, whether a teammate asked the same thing, and that suggested themes are only suggestions.</td>
+        <td data-l="Leads to">Your codebook, or the team codebook when the question is shared.</td></tr>
+      <tr><td><span class="order">5</span>Read the next conversation</td>
+        <td data-l="When">Nothing is open and nothing is waiting. Also offered right after you file a review.</td>
+        <td data-l="You need">A two-line summary, why this one (the question or line it serves), its length, and whether a teammate has already read it.</td>
+        <td data-l="Leads to">The reader. "Not this one" brings the next pick, with no new AI call.</td></tr>
+      <tr><td><span class="order">6</span>Jot a question</td>
+        <td data-l="When">Always available in the side column. It becomes the top card only on a first visit, when you have none.</td>
+        <td data-l="You need">That a question is scratch paper, not a plan, and two or three starting ideas drawn from the projects' conversation guides.</td>
+        <td data-l="Leads to">Stays on the desk. The question starts gathering passages as you listen.</td></tr>
+      <tr><td><span class="order">7</span>Keep or drop an offered listening line</td>
+        <td data-l="When">The AI has offered lines and you have not decided. Shown in the side column, never as the top card.</td>
+        <td data-l="You need">The line, the one-sentence reason, and that keeping it steers what gets recommended next.</td>
+        <td data-l="Leads to">Stays on the desk.</td></tr>
+      <tr><td><span class="order">8</span>See what a teammate found</td>
+        <td data-l="When">A teammate filed something under a question like one of yours, or highlighted a conversation you have read.</td>
+        <td data-l="You need">Who, what, which of your questions it relates to, and when.</td>
+        <td data-l="Leads to">The Team page at that question, or the transcript at that passage.</td></tr>
+      <tr><td><span class="order">9</span>Summarise conversations</td>
+        <td data-l="When">Only when there is nothing to recommend because conversations have no summary yet. A setup chore, so it never competes with reading.</td>
+        <td data-l="You need">How many are left, that it is a one-time step per conversation and shared with your team, and that you can stop it.</td>
+        <td data-l="Leads to">Stays on the desk, then a recommendation appears.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="rules">
+    <div><b>One next step, not six lanes</b>Today's desk shows every lane at equal weight, including empty ones. Here one card answers "what now", and the rest wait in order.</div>
+    <div><b>Every action carries its facts</b>Each card shows the few facts that make the decision easy, so you never open a page to find out whether it was worth opening.</div>
+    <div><b>Questions always visible</b>Your questions stay in the side column with how widely each has been heard, because they are why you are listening.</div>
+    <div><b>AI offers stay small</b>Anything the AI wrote is dashed and marked with the sparkle. It never takes the top card away from your own unfinished work.</div>
+  </div>
+</main>
+
+<script>
+const sparkle = '<svg class="i fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2l1.8 5.2L17 9l-5.2 1.8L10 16l-1.8-5.2L3 9l5.2-1.8L10 2zm8 11l.9 2.6 2.6.9-2.6.9L18 20l-.9-2.6-2.6-.9 2.6-.9L18 13z"/></svg>';
+const play = '<svg class="i fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>';
+const LOOP = ["Listen", "Reflect", "Decide", "Draw themes"];
+
+const QUESTIONS = [
+  { name: "Who gets to decide when and where meetings happen?", heard: 6, of: 14, insights: 7, team: "Maya asked something close to this" },
+  { name: "Where do newcomers first feel known?", heard: 3, of: 14, insights: 4 },
+  { name: "What makes people stop coming?", heard: 1, of: 14, insights: 1 },
+];
+
+const STATES = {
+  first: {
+    here: 0,
+    hello: "Welcome. Your workspace holds 14 conversations across 2 projects.",
+    now: {
+      tags: ['<span class="tag when">Start here</span>'],
+      title: "Jot down what you are listening for",
+      why: "One or two questions is enough. They are scratch paper, not a plan, and you can change them any time.",
+      facts: [["In this workspace", "14 conversations"], ["Projects", "Riverbend East, Riverbend West"], ["Teammates here", "Maya, Dev"]],
+      primary: "Add a question", secondary: ["Skip, just start listening"],
+      also: "Three ideas from the projects' conversation guides are in the side column.",
+      note: "<b>When:</b> only with no questions yet. <b>Info needed:</b> how much there is to listen to and who else is here, so the first question is not written in a vacuum.",
+    },
+    after: [
+      { when: "After your first question", title: "Listen to a first conversation", info: "Suggested: “Tuesday evening at the library”, 42 min. It is the one most teammates have read.", action: "Open it" },
+    ],
+    questions: [], offers: [
+      { t: "What would make it easier to show up?", r: "From the Riverbend East conversation guide." },
+      { t: "Who do you turn to when something goes wrong?", r: "From the Riverbend West conversation guide." },
+    ], offerTitle: "Ideas from the guides", offerKeep: "Use this",
+    team: [{ who: "Maya", what: "has read 5 conversations and filed 9 insights.", t: "This week" }],
+  },
+  reading: {
+    here: 0,
+    hello: "Good afternoon. You are partway through a conversation.",
+    now: {
+      tags: ['<span class="tag when">You stopped here yesterday</span>'],
+      title: "Pick up “Tuesday evening at the library”",
+      why: "You have 18 minutes left. It has already spoken to two of your questions.",
+      facts: [["Where you stopped", "24:10 of 42:00"], ["Your highlights", "5, with 2 starred"], ["Speaking to", "Who decides, Newcomers"], ["Project", "Riverbend East"]],
+      quote: { text: "If the meeting is at six, you have already decided who is in the room.", by: "Your last highlight, at 23:40" },
+      primary: play + " Pick up at 24:10", secondary: ["Reflect now instead"],
+      also: "Reflecting before you finish is fine. Your place is kept.",
+      note: "<b>When:</b> a conversation is open and unfinished, and nothing is waiting for a decision. <b>Info needed:</b> how much is left and what you already marked, so you can choose between finishing and reflecting on what you have.",
+    },
+    after: [
+      { when: "When you reach the end, or sooner", title: "Reflect on what you heard", info: "A few sentences, typed or spoken. Your 5 highlights come along.", action: "Reflect" },
+      { when: "After you reflect", title: "Decide on what the AI connects", info: "It suggests insights under your questions. Nothing is filed until you say so.", action: null },
+    ],
+    questions: QUESTIONS, offers: [
+      { t: "Hear from people who work evening shifts", r: "From your question about who decides meeting times." },
+    ], offerTitle: "Offered lines to listen for", offerKeep: "Keep",
+    team: [
+      { who: "Maya", what: "highlighted a passage in this conversation, at 31:05.", t: "2 hours ago" },
+      { who: "Dev", what: "filed 2 insights under a question like “Who gets to decide…”.", t: "Yesterday" },
+    ],
+  },
+  decide: {
+    here: 2,
+    hello: "Good morning. Something is waiting on you.",
+    now: {
+      tags: ['<span class="tag yours">Waiting on you</span>', '<span class="tag when">Since yesterday, 4:12 pm</span>'],
+      title: "Decide on 4 insights from your reflection",
+      why: "Do this while the conversation is fresh. It takes about three minutes.",
+      facts: [["From", "Tuesday evening at the library"], ["Touches", "2 of your questions"], ["Already decided", "1 of 5 kept"], ["Starred, not placed", "1 highlight"]],
+      quote: { text: "They kept saying the meeting time decides who gets heard. I want to hear from renters next.", by: "Your reflection, typed" },
+      primary: "Finish the review", secondary: ["Read the reflection"],
+      also: "Nothing reaches your memo or your team until you file it.",
+      note: "<b>When:</b> any undecided insights exist. This outranks everything else because memory of the conversation fades. <b>Info needed:</b> the count, how far you got, and your own words, so you remember what you were thinking.",
+    },
+    after: [
+      { when: "Right after you file", title: "Read “Saturday at the market”", info: "Recommended because it has renters talking about meeting times. 35 min.", action: "Preview" },
+      { when: "Still open", title: "Finish “Coffee after the service”", info: "You stopped at 9:30 of 51:00, with no highlights yet.", action: "Pick up" },
+    ],
+    questions: QUESTIONS, offers: [], offerTitle: "Offered lines to listen for", offerKeep: "Keep",
+    team: [{ who: "Dev", what: "filed 2 insights under a question like “Who gets to decide…”.", t: "Yesterday" }],
+  },
+  caught: {
+    here: 0,
+    hello: "You are caught up. Nothing is open and nothing is waiting.",
+    now: {
+      tags: ['<span class="tag ai">' + sparkle + ' Recommended</span>'],
+      title: "Read “Saturday at the market” next",
+      why: "It is the conversation most likely to answer “What makes people stop coming?”, which you have heard in only 1 of 14.",
+      facts: [["Length", "35 min"], ["Project", "Riverbend West"], ["Serves", "What makes people stop coming?"], ["Team", "Maya read it, 3 highlights"]],
+      quote: { text: "Several vendors describe trying a neighbourhood meeting once and not going back, and what would bring them in.", by: "Summary, written by the AI" },
+      primary: "Open it", secondary: ["Not this one", "Browse all 14"],
+      also: "“Not this one” shows the next pick without asking the AI again.",
+      note: "<b>When:</b> nothing is open or waiting, and right after filing a review. <b>Info needed:</b> why this one, tied to a question you are thin on, plus length and whether a teammate has been there, so the choice is yours and not the AI's.",
+    },
+    after: [
+      { when: "Any time", title: "Look at what your team is hearing", info: "Maya and Dev filed 6 insights this week, 4 under questions like yours.", action: "Open Team" },
+    ],
+    questions: QUESTIONS, offers: [
+      { t: "Hear from people who came once and did not return", r: "From your question about what makes people stop coming." },
+      { t: "Hear how vendors find out about meetings", r: "From your highlight about flyers at the market." },
+    ], offerTitle: "Offered lines to listen for", offerKeep: "Keep",
+    team: [{ who: "Maya", what: "starred a passage in “Saturday at the market”.", t: "Monday" }],
+  },
+  build: {
+    here: 3,
+    hello: "One of your questions has enough behind it to work with.",
+    now: {
+      tags: ['<span class="tag when">Ready since your last review</span>', '<span class="tag team">Shared with Maya</span>'],
+      title: "Draw themes for “Who gets to decide when and where meetings happen?”",
+      why: "You and Maya asked nearly the same question. Together there are 12 filed insights, enough to see patterns.",
+      facts: [["Insights", "7 yours, 5 Maya's"], ["Heard in", "6 of 14 conversations"], ["Themes so far", "None"], ["Still thin on", "Evening-shift workers"]],
+      primary: "Open the team codebook", secondary: [sparkle + " Suggest themes", "Keep listening first"],
+      also: "Suggested themes are drafts. You and Maya keep, rename or drop each one.",
+      note: "<b>When:</b> a question passes about five filed insights from three or more conversations, alone or with a teammate's matching question. <b>Info needed:</b> how much evidence there is, from whom, and what is still thin, so you can judge whether it is too early.",
+    },
+    after: [
+      { when: "Before or after", title: "Read “Night shift break room”", info: "Recommended because the question is thin on evening-shift workers. 28 min.", action: "Preview" },
+      { when: "Still open", title: "Finish “Coffee after the service”", info: "You stopped at 9:30 of 51:00.", action: "Pick up" },
+    ],
+    questions: QUESTIONS, offers: [], offerTitle: "Offered lines to listen for", offerKeep: "Keep",
+    team: [{ who: "Maya", what: "grouped their question with yours.", t: "This morning" }],
+  },
+};
+
+function render(key) {
+  const s = STATES[key];
+  const n = s.now;
+  const loop = LOOP.map((l, i) => `<li class="${i < s.here ? "done" : i === s.here ? "here" : ""}">${l}</li>`).join("");
+  const facts = n.facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
+  const quote = n.quote ? `<blockquote class="quote">${n.quote.text}<cite>${n.quote.by}</cite></blockquote>` : "";
+  const after = s.after.map((a) => `<li>
+      <div class="when"><span class="tag when">${a.when}</span></div>
+      <div><h3>${a.title}</h3><p class="info">${a.info}</p></div>
+      ${a.action ? `<button class="btn outline small">${a.action}</button>` : "<span></span>"}
+    </li>`).join("");
+  const questions = s.questions.length
+    ? s.questions.map((q, i) => {
+        const ready = key === "build" && i === 0;
+        const thin = q.heard <= 1;
+        return `<div class="q"><h3>${q.name}</h3>
+          <div class="meta"><span class="bar" role="img" aria-label="Heard in ${q.heard} of ${q.of} conversations"><i style="width:${Math.round((q.heard / q.of) * 100)}%"></i></span>
+            <span>Heard in ${q.heard} of ${q.of}</span><span>${q.insights} ${q.insights === 1 ? "insight" : "insights"}</span></div>
+          ${ready ? '<p class="nudge ready">Enough to draw themes from</p>' : thin ? '<p class="nudge">Thin so far. The next recommendation leans this way.</p>' : ""}
+          ${q.team ? `<p class="nudge"><span class="tag team">Team</span>${q.team}</p>` : ""}</div>`;
+      }).join("")
+    : '<p style="font-size:13px;color:var(--g4)">None yet. Add one above, or use an idea below.</p>';
+  const offers = s.offers.map((o) => `<div class="offer"><p class="t">${o.t}</p><p class="r">${o.r}</p>
+      <div class="acts"><button class="btn small">${s.offerKeep}</button><button class="btn quiet small">Not this</button></div></div>`).join("");
+  const team = s.team.map((t) => `<p class="teamline"><b>${t.who}</b> ${t.what}<br><span class="t">${t.t}</span></p>`).join("");
+
+  document.getElementById("desk").innerHTML = `
+    <p class="hello">${s.hello}</p>
+    <div class="grid">
+      <div>
+        <section aria-labelledby="now-h">
+          <div class="now">
+            <ol class="loop" aria-label="Where you are in the loop">${loop}</ol>
+            <div class="step">${n.tags.join("")}</div>
+            <h1 id="now-h">${n.title}</h1>
+            <p class="why">${n.why}</p>
+            <dl class="facts">${facts}</dl>
+            ${quote}
+            <div class="acts"><button class="btn">${n.primary}</button>${n.secondary.map((b) => `<button class="btn outline">${b}</button>`).join("")}</div>
+            <p class="also">${n.also}</p>
+          </div>
+          <p class="note">${n.note}</p>
+        </section>
+        <section aria-labelledby="after-h">
+          <h2 class="h2" id="after-h">After that <small>in the order the desk would offer them</small></h2>
+          <ul class="queue">${after}</ul>
+          <p class="note"><b>Why a queue:</b> today's desk shows six lanes at once, several of them empty. Here the other actions wait in order, each labelled with when it becomes the next step, so nothing competes with the top card.</p>
+        </section>
+      </div>
+      <aside>
+        <section aria-labelledby="q-h">
+          <h2 class="h2" id="q-h">What you are listening for</h2>
+          ${questions}
+          <div class="jot"><div>Jot a question…</div><button class="btn small">Add</button></div>
+          <p class="note"><b>Always here</b>, because questions are the reason for every other action. The bar replaces the row of dots: it reads the same at 3 conversations or 300. A thin question says so, and steers the next recommendation.</p>
+        </section>
+        ${offers ? `<section aria-labelledby="o-h"><h2 class="h2" id="o-h">${sparkle} ${s.offerTitle}</h2>${offers}
+          <p class="note"><b>When:</b> only while offers are undecided. <b>Info needed:</b> the reason, in one sentence. Dashed and sparkled because the AI wrote it. It never becomes the top card.</p></section>` : ""}
+        <section aria-labelledby="t-h">
+          <h2 class="h2" id="t-h">From your team</h2>
+          ${team}
+          <p style="margin-top:12px;font-size:13px"><a href="#">Open the Team page</a></p>
+          <p class="note"><b>When:</b> only items that touch your questions or a conversation you have read. <b>Info needed:</b> who, what and which of your questions, so it is a reason to look and not a feed.</p>
+        </section>
+      </aside>
+    </div>`;
+}
+
+const stateButtons = [...document.querySelectorAll("[data-state]")];
+const mapButton = document.querySelector('[data-view="map"]');
+function show(key) {
+  const isMap = key === "map";
+  document.getElementById("map").hidden = !isMap;
+  document.getElementById("desk").hidden = isMap;
+  stateButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.state === key)));
+  mapButton.setAttribute("aria-pressed", String(isMap));
+  if (!isMap) render(key);
+  window.scrollTo(0, 0);
+}
+stateButtons.forEach((b) => b.addEventListener("click", () => show(b.dataset.state)));
+mapButton.addEventListener("click", () => show("map"));
+const notes = document.getElementById("notes");
+notes.addEventListener("click", () => {
+  const on = document.body.classList.toggle("notes");
+  notes.setAttribute("aria-pressed", String(on));
+});
+show(new URLSearchParams(location.search).get("s") || "reading");
+if (new URLSearchParams(location.search).get("notes")) notes.click();
+</script>
+</body>
+</html>
