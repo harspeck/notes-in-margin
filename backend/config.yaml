@@ -83,3 +83,12 @@ gists:
 # The conversation recommended after a session (POST /next_steps/recommend).
 next_steps:
   min_minutes_between_auto_runs: 30
+
+# The Team Page. "Look for questions that match" uses the small model; "Suggest themes" for
+# the team codebook uses ai_review's model.
+team:
+  model: "claude-haiku-5-5"
+  reasoning_effort: "low"
+  max_new_themes_per_run: 3
+  max_suggested_themes: 6
+  access_recheck_minutes: 5

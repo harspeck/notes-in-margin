@@ -10,6 +10,9 @@ import SettingsPage from "./pages/SettingsPage";
 import SignInPage from "./pages/SignInPage";
 import WorkspacePage from "./pages/WorkspacePage";
 import ActivityPage from "./pages/ActivityPage";
+import TeamPage from "./pages/TeamPage";
+import TeamPersonPage from "./pages/TeamPersonPage";
+import TeamCodebookPage from "./pages/TeamCodebookPage";
 import { DESK_CHANGED_EVENT, SIGNED_OUT_EVENT, api, errorStatus, errorText } from "./lib/api";
 import { SessionContext, isHosted } from "./lib/session";
 import type { DeskLastConversation, Me } from "./lib/types";
@@ -63,6 +66,7 @@ function Header({ me, onSignOut }: { me: Me | null; onSignOut: () => void }) {
           </NavLink>
           <NavLink to="/questions">Questions</NavLink>
           <NavLink to="/codebook">Codebook</NavLink>
+          <NavLink to="/team">Team</NavLink>
           {last && (
             <>
               <span className="sep" aria-hidden="true" />
@@ -163,6 +167,9 @@ export default function App() {
               <Route path="/questions" element={<QuestionsPage />} />
               <Route path="/codebook" element={<OrganizePage />} />
               <Route path="/organize" element={<Navigate to="/codebook" replace />} />
+              <Route path="/team" element={<TeamPage />} />
+              <Route path="/team/people/:userId" element={<TeamPersonPage />} />
+              <Route path="/team/codebook/:groupId" element={<TeamCodebookPage />} />
               <Route path="/activity" element={<ActivityPage />} />
               <Route path="/projects" element={<WorkspacePage />} />
               <Route path="/memo" element={<div className="legacy"><MemoPage /></div>} />

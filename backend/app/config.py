@@ -70,6 +70,15 @@ class NextStepsConfig(BaseModel):
     min_minutes_between_auto_runs: int = 30  # POST /next_steps/recommend never calls the model sooner
 
 
+class TeamConfig(BaseModel):
+    model: str = "claude-haiku-5-5"  # matching questions across people; themes use ai_review's model
+    reasoning_effort: str = "low"
+    max_new_themes_per_run: int = 3
+    max_suggested_themes: int = 6  # undecided suggested themes per group; at the cap, no call
+    # How long a session's "which projects can this account reach" answer is reused.
+    access_recheck_minutes: float = 5
+
+
 class CorticoWriteBackConfig(BaseModel):
     highlights: bool = True
 
@@ -113,6 +122,7 @@ class Config(BaseModel):
     listening_suggestions: ListeningSuggestionsConfig = ListeningSuggestionsConfig()
     gists: GistsConfig = GistsConfig()
     next_steps: NextStepsConfig = NextStepsConfig()
+    team: TeamConfig = TeamConfig()
 
     @property
     def project_root(self) -> Path:

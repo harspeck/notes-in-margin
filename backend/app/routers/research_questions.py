@@ -133,22 +133,9 @@ def create_research_question(
     body: ResearchQuestionCreate, prototype_db: Session = Depends(get_prototype_db),
     user: CurrentUser = Depends(current_user),
 ):
-    max_order = (
-        prototype_db.query(ResearchQuestion)
-        .filter(ResearchQuestion.user_id == user.id)
-        .count()
+    rq = questions.create_question(
+        prototype_db, user.id, workspace_project_ids(active_workspace(prototype_db, user)), body.name, body.description
     )
-    workspace_projects = workspace_project_ids(active_workspace(prototype_db, user))
-    rq = ResearchQuestion(
-        user_id=user.id,
-        # A research question spans the workspace; project_id records where it started.
-        project_id=workspace_projects[0] if workspace_projects else config.default_project_id,
-        name=body.name,
-        description=body.description,
-        display_order=max_order,
-    )
-    prototype_db.add(rq)
-    prototype_db.flush()
     activity.log_activity(
         prototype_db, user.id, "user", activity.RQ_CREATED,
         f"You added a research question: \u201c{activity.excerpt(rq.name)}\u201d", research_question_id=rq.id,

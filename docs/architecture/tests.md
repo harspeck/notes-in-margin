@@ -1,6 +1,6 @@
 # Tests
 
-Run them with `cd backend && OPENAI_API_KEY=sk-fake .venv/bin/python -m pytest -q` (195 tests, about 4.5 s). They
+Run them with `cd backend && OPENAI_API_KEY=sk-fake .venv/bin/python -m pytest -q` (205 tests, about 7 s). They
 need no network, API key or running server.
 
 ## Environment (`backend/tests/conftest.py`)
@@ -56,6 +56,7 @@ need no network, API key or running server.
 | `test_rq_merges.py` | RQ merge and undo, refused merges (self, archived, merged, cycles), a cyclic merge row not hanging the resolver, memo bucketing and reorder across a merged group, the cap and valid entries spanning the group, families kept with the target on undo |
 | `test_code_family_edits.py` | Create (accepted, uncapped, 422 on entries outside the group), replacing members and renaming write a revision first, star accepts a suggested family and 409s on dismissed or merged, user merge and its validation, `accept_merge` going through `merge_families` |
 | `test_organize.py` | Focus toggle and 409 on a merged RQ, `/organize` folding merged sources into their target, the `/codebook_prep` shape, filters and warnings |
+| `test_team.py` | In snapshot mode: what a teammate sees (filed insights, highlights with notes, questions, finished reflections; never suggested, rejected, retracted or merged insights, unfinished reflections, the set-aside list, undecided AI suggestions, a question with nothing filed, or work filed under someone else's question); adopting a question once; question groups by hand and from hand-built model output (invented ids, grouped and waiting questions, a dismissed pair, the run row and its fingerprint, a failed call, 409s on a suggested group and on accept); a merged question held by the lowest group; `_apply_theme_results`; theme edits, the add and remove routes, revisions, the cap. Against the fake Cortico: a user whose workspace holds project 501 only seeing nothing made on conversation 7002 through any team read route (rows, evidence, group names and rationales, themes that hold or held a hidden insight, who made what), 404 and 422 in plain sentences for direct ids, and neither paid route sending or saving anything from outside the scope; the scope shrinking when Cortico takes a project away, one lookup per session per window, and 503 when Cortico fails; every write answering 404 for a user with no workspace; a name outliving its session |
 
 ## Which test to copy
 
@@ -67,6 +68,11 @@ need no network, API key or running server.
   replaces the service module's `structured_json` with a function that records the payload
   and returns hand-built output, so the route, the payload and the error path
   (`AIProviderError`) are tested with no model.
+- **Two users in `cortico_api` mode:** copy the `cortico` fixture in `test_team.py`. Its
+  `TeamCortico` adds its own users to `FakeCortico` (plus roles that can be revoked and a
+  `/v2/me` that can fail), and it clears the access cache before and after, so rows other files made for the shared fake users can't
+  change its counts. If you change the access rule in `services/team.py`, check that
+  `test_a_narrower_workspace_sees_nothing_made_outside_it` fails with the filter removed.
 - **Checks against Cortico data:** copy `test_ai_review_validation.py`.
 - **A per-user route:** copy the `user_id` fixture in `test_typed_reflection_and_desk.py`,
   which overrides `current_user` with a fresh user id per test, so shared rows from other

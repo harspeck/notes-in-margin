@@ -741,3 +741,147 @@ export interface GapListenNextResult {
   gap: QuestionGap;
   next_steps: (NextStepSuggestion & { created: boolean })[];
 }
+
+/** Who made a row on the team pages. Never carries an email. */
+export interface TeamAuthor {
+  user_id: number;
+  name: string;
+  is_you: boolean;
+}
+
+export interface TeamPerson {
+  user_id: number;
+  name: string;
+  is_you: boolean;
+  conversations_opened: number;
+  highlight_count: number;
+  insight_count: number;
+  question_count: number;
+  reflection_count: number;
+}
+
+export interface TeamQuestion {
+  research_question_id: number;
+  name: string;
+  description: string | null;
+  author: TeamAuthor;
+  insight_count: number;
+  highlight_count: number;
+  conversation_count: number;
+  group_id: number | null;
+  adopted_by_you: boolean;
+}
+
+/** The same question, asked by different people. `created_by` is null when the AI suggested it. */
+export interface TeamQuestionGroup {
+  id: number;
+  name: string;
+  status: "suggested" | "active" | "dismissed";
+  rationale: string | null;
+  created_by: TeamAuthor | null;
+  question_ids: number[];
+  theme_count: number;
+}
+
+/** `GET /team`. Counts cover only the conversations of the active workspace. */
+export interface TeamOverview {
+  people: TeamPerson[];
+  questions: TeamQuestion[];
+  groups: TeamQuestionGroup[];
+  conversation_count: number;
+}
+
+export interface TeamEvidence {
+  snippet_id: number;
+  conversation_id: number;
+  conversation_title: string | null;
+  text: string;
+  start_index: number;
+  end_index: number;
+}
+
+export interface TeamInsight {
+  connection_id: number;
+  insight_text: string;
+  author: TeamAuthor;
+  conversation_id: number;
+  conversation_title: string | null;
+  voice_memo_id: number;
+  filed_at: string | null;
+  evidence: TeamEvidence[];
+}
+
+export interface TeamQuestionHighlight {
+  highlight_id: number;
+  author: TeamAuthor;
+  conversation_id: number;
+  conversation_title: string | null;
+  text: string;
+  notes: string | null;
+  starred: boolean;
+}
+
+/** `GET /team/questions/{id}`. */
+export interface TeamQuestionDetail {
+  question: TeamQuestion;
+  insights: TeamInsight[];
+  highlights: TeamQuestionHighlight[];
+}
+
+export interface TeamReflection {
+  voice_memo_id: number;
+  conversation_id: number;
+  conversation_title: string | null;
+  recorded_at: string | null;
+  typed: boolean;
+  text: string;
+}
+
+/** `GET /team/people/{user_id}`. */
+export interface TeamPersonDetail {
+  person: TeamPerson;
+  reflections: TeamReflection[];
+  questions: TeamQuestion[];
+}
+
+/** `GET /conversations/{id}/team_highlights`: other users' highlights, never the viewer's own. */
+export interface TeamHighlight {
+  highlight_id: number;
+  author: TeamAuthor;
+  notes: string | null;
+  starred: boolean;
+  created_at: string | null;
+  question_names: string[];
+  snippets: HighlightSnippetSpan[];
+  /** The same highlight's id in Cortico, so it is not also shown as an "In Cortico" one. */
+  cortico_id: number | null;
+}
+
+export interface TeamTheme {
+  id: number;
+  name: string;
+  definition: string;
+  status: "suggested" | "accepted" | "dismissed";
+  created_by: TeamAuthor | null;
+  updated_by: TeamAuthor | null;
+  updated_at: string | null;
+  member_connection_ids: number[];
+}
+
+/** `GET /team/question_groups/{id}`. */
+export interface TeamGroupDetail {
+  group: TeamQuestionGroup;
+  questions: TeamQuestion[];
+  insights: TeamInsight[];
+  themes: TeamTheme[];
+}
+
+/** One row of `GET /team/themes/{id}/history`: the theme as it was before an edit. */
+export interface TeamThemeRevision {
+  id: number;
+  name: string;
+  definition: string;
+  member_connection_ids?: number[];
+  edited_by: TeamAuthor | null;
+  created_at: string | null;
+}

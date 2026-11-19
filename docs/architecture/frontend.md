@@ -62,6 +62,13 @@ matching type in the same PR, because nothing checks them against each other.
   `ReadingState` the answer of `PUT .../reading_position`. `ReviewDraftResponse`,
   `ListeningInterest`, `SetAsideItem`, `RestoreResult`, `ActivityItem` and `ActivityPage`
   mirror the review draft, listening interest, set-aside, restore and activity routes.
+- The team types mirror the `/team` routes. `TeamAuthor` (`user_id`, `name`, `is_you`) is on
+  every teammate row. `TeamOverview` (`TeamPerson`, `TeamQuestion`, `TeamQuestionGroup`) mirrors
+  `GET /team`, `TeamQuestionDetail` (`TeamInsight`, `TeamEvidence`, `TeamQuestionHighlight`)
+  `GET /team/questions/{id}`, `TeamPersonDetail` (`TeamReflection`) `GET /team/people/{id}`,
+  `TeamGroupDetail` (`TeamTheme`) `GET /team/question_groups/{id}`, `TeamThemeRevision` one row
+  of a theme's history, and `TeamHighlight` one row of
+  `GET /conversations/{id}/team_highlights`.
 
 ## Shared code (`frontend/src/lib/`)
 
@@ -74,6 +81,8 @@ matching type in the same PR, because nothing checks them against each other.
   page). They take numbers from `GET /research_questions/breadth` and compute none.
 - `ui.tsx`: `ToastProvider`, `Icon`, `Dots` (the breadth gauge) and `ProvTag` (Suggested by
   AI, AI kept as written, AI + you, Yours). It exports components only, for fast refresh.
+- `team.ts`: `questionCounts` and `personCounts` (the count lines on the team pages) and
+  `focusLater`, which moves focus after a reload has taken the focused control away.
 - `questions.ts`: `buildQuestions` joins `GET /organize` (questions, merges, code families)
   with `GET /memo` (who wrote each insight), for the Questions page. It holds no breadth.
 
@@ -90,11 +99,14 @@ is kept in the browser (the earlier `recent.ts` and its `nim.recent` key are gon
 | Path | Page | Notes |
 |---|---|---|
 | `/` | `DeskPage` | Three lanes and three lists. Keep reading and Finish come from `GET /desk`. Keep reading: opened conversations with no reflection, with the project name, progress (audio position over duration), "You stopped at", highlight counts and "Pick up at", which links to `/read/N?resume=1`; three cards show until "Show more". Finish: every reflection waiting on the user, worded by `state` (`undecided`, `not_reviewed`, `transcribing`). Listen next: `GET /next_steps` suggestions. Then all conversations with a title search, "What you want to hear next" (`ListeningInterests`, with "Suggest next steps", paid), and the questions with their breadth (`GET /research_questions/breadth`, which also marks a conversation "Reflected") and a jot form. With no questions the list shows `GuideIdeas`. Hosted, `GET /desk` has no project names, so the page reads the active organization's projects once (`GET /organizations/{id}/projects`) and maps `project_id` to a name. `/?conversation=N&snippet=ID` (the old transcript link) redirects to `/read/N?snippet=ID`. |
-| `/read/:conversationId` | `ReaderPage` | The transcript in one wide column with notes in the margin. `?snippet=ID` scrolls to and flashes a turn, `?resume=1` returns to the saved turn and audio time (`?snippet=` wins when both are there), and `?review=ID` shows "Back to review". Selecting words offers Highlight, Star and Add note. With audio, the bar holds `Player` (play and pause, back and forward 10 seconds, a position slider, speed), each turn's time is a play button, and double-clicking a word plays from that word, so a double-click no longer selects it. The turn and word being played carry `data-now`, set on the page by `markNow` and not through React state, so playing does not render the transcript again. Highlights that exist in Cortico (`GET /conversations/{id}/cortico_highlights`) are underlined in grey with an "In Cortico" margin note, read-only, and a checkbox above the transcript hides them. A margin note shows the questions the highlight is filed under as chips, with "Add to a question" (`PUT /highlights/{id}/questions`). Passages the AI found that are still undecided are drawn dashed in the transcript with "Add as a highlight" and "Not this". Guide sections are set, moved and removed from the transcript. The notebook is closed until asked for; Reflect opens it with the recorder, or with the writing box. `MAX_VOICE_MEMO_SECONDS = 1200` must match `voice_memo.max_duration_seconds` in `backend/config.yaml`. |
+| `/read/:conversationId` | `ReaderPage` | The transcript in one wide column with notes in the margin. `?snippet=ID` scrolls to and flashes a turn, `?resume=1` returns to the saved turn and audio time (`?snippet=` wins when both are there), and `?review=ID` shows "Back to review". Selecting words offers Highlight, Star and Add note. With audio, the bar holds `Player` (play and pause, back and forward 10 seconds, a position slider, speed), each turn's time is a play button, and double-clicking a word plays from that word, so a double-click no longer selects it. The turn and word being played carry `data-now`, set on the page by `markNow` and not through React state, so playing does not render the transcript again. Highlights that exist in Cortico (`GET /conversations/{id}/cortico_highlights`) are underlined in grey with an "In Cortico" margin note, and teammates' highlights (`GET /conversations/{id}/team_highlights`, a failed load is silent) are underlined in blue with a "Teammate" note (author, note, star, question names, "Play from"). Both are read-only, and one checkbox above the transcript, "Show N highlights from others", hides both. A margin note shows the questions the highlight is filed under as chips, with "Add to a question" (`PUT /highlights/{id}/questions`). Passages the AI found that are still undecided are drawn dashed in the transcript with "Add as a highlight" and "Not this". Guide sections are set, moved and removed from the transcript. The notebook is closed until asked for; Reflect opens it with the recorder, or with the writing box. `MAX_VOICE_MEMO_SECONDS = 1200` must match `voice_memo.max_duration_seconds` in `backend/config.yaml`. |
 | `/review/:voiceMemoId` | `ReviewPage` | Insights grouped by question with transcript passages as receipts, Keep, Edit and Set aside, starred highlights not yet in an insight, "Add an insight the AI missed", the Set aside list with "Bring back", and the decision bar. A typed reflection shows "What you wrote" with no player, duration or recording links. |
 | `/questions` | `QuestionsPage` | `?q=<id>` picks the question (`?q=none` is the insights with no question). The side list has the questions with their breadth, the jot form, "Look for things to merge" (paid) with the suggested question pairs under it, `GuideIdeas`, and the merged and archived questions with "Undo merge" and "Restore". A question has: reword, the breadth sentence, the three levers (`QuestionLevers`), suggested insight pairs, its insights, "Highlights filed here, no insight yet" (`GET /research_questions/{id}/highlights`, with "Remove from this question"), its Set aside list with "Bring back", merge into another question, undo a merge, and archive. An insight card groups its passages by the conversation each comes from, lists what was merged into it with "Undo merge", and offers Edit, Move (`PATCH` with `research_question_id`), "Merge into…" (any other insight, under any question) and Set aside. |
+| `/team` | `TeamPage` | What everyone made on the conversations of the active workspace (`GET /team`), read-only except for the viewer's own rows. People link to their page. Questions: suggested groups first (dashed, with the AI's reason, "Group these" and "Keep separate"), then each active group as a box with "Open the team codebook", then the ungrouped questions. An ungrouped question has a disclosure that reads `GET /team/questions/{id}` when opened (insights with quoted passages, highlights with note and star), "Add to my questions" on a teammate's question (`POST .../adopt`), and "Same question as…", which makes a group with another question or adds it to an active group. "Look for questions that match" is paid (`POST /team/question_groups/suggest`). |
+| `/team/people/:userId` | `TeamPersonPage` | One person's reflections (conversation, date, text) and questions, from `GET /team/people/{id}`. |
+| `/team/codebook/:groupId` | `TeamCodebookPage` | One question group (`GET /team/question_groups/{id}`): rename, its questions with "Take out of this group", then Themes. An accepted theme shows its insights with author, edits name and definition in place, removes a member (`PUT /team/themes/{id}/members`, which replaces the whole set) and has a History disclosure (`GET /team/themes/{id}/history`). Suggested themes are dashed with Keep and Not this. "Suggest themes" is paid (`POST .../themes/synthesize`); "Add a theme" is by hand. "Insights not in any theme" lists the insights no accepted theme holds, each with a select to add it to one. |
 | `/activity` | `ActivityPage` | The log from `GET /activity`, newest first. The chips All, Claude suggested, You changed and You set aside are the route's `filter` (`all`, `ai`, `changed`, `set_aside`); "Show more" passes `next_before` as `before`. A row shows the summary as given and links to the review, conversation and question its `refs` name. |
-| `/codebook` | `OrganizePage` | The earlier Organize page: the questions with a focus toggle, each question's insights, its code families (`CodeFamilyCard`), the cap, merges and "Prepare codebook". The selection lives in `?rq=<id>`. `/organize` redirects here. It never calls synthesis. |
+| `/codebook` | `OrganizePage` | The user's own codebook, with a link to the team page. The earlier Organize page: the questions with a focus toggle, each question's insights, its code families (`CodeFamilyCard`), the cap, merges and "Prepare codebook". The selection lives in `?rq=<id>`. `/organize` redirects here. It never calls synthesis. |
 | `/memo` | `MemoPage` | The earlier memo page: entries, next steps, code families and merge suggestions. |
 | `/settings` | `SettingsPage` | View, edit, save and reset the review prompt. |
 | `/projects` | `WorkspacePage` | Picks the projects to work in: open a saved set, or choose an organization and its projects and save a new one (`POST /workspaces`). The page says "projects"; the backend calls a saved set a workspace. |
@@ -111,8 +123,15 @@ recorder, because the hosted backend can't store or transcribe audio
 ## Components (`frontend/src/components/`)
 
 - `TranscriptView`: turns, word-level highlights, margin notes (star, note, questions,
-  remove), AI-found passages (`mark.hl.found` and `aside.mnote.found`), guide section markers,
-  and the selection menu.
+  remove), AI-found passages (`mark.hl.found` and `aside.mnote.found`), other people's
+  highlights (`mark.hl.team` with `aside.mnote.team`, and `mark.hl.cortico` with
+  `aside.mnote.cortico`), guide section markers, and the selection menu. When words overlap
+  the order is: the user's own highlight, an AI-found passage, a teammate's, Cortico's. A
+  Cortico highlight whose `cortico_id` matches a teammate's highlight is left out, because it
+  is the same highlight written back.
+- `TeamParts`: `Byline` (the author's name with a "you" tag), `TeamInsightCard` (an insight
+  with its quoted passages, each linked to its own conversation) and `TeamQuestionWork` (what
+  is filed under one team question, loaded when its disclosure opens). Used by the team pages.
 - `GuideIdeas`: "From your conversation guide" (`GET /research_questions/guide_ideas`), each
   idea with "Add as a question" and, when `projects_not_loaded` is not empty, "Load more".
   With `emptyState` it is the empty state of a questions list. Used by `QuestionsPage`,
@@ -147,7 +166,8 @@ recorder, because the hosted backend can't store or transcribe audio
 
 - Every paid action runs only from its own click: "Look for things to merge"
   (`POST /merge_nudges/generate`), "Find more passages", "What am I missing?", "Suggest
-  themes" and "Suggest next steps". Nothing calls them on load. Opening a question or the
+  themes" and "Suggest next steps", and on the team pages "Look for questions that match" and
+  "Suggest themes". Nothing calls them on load. Opening a question or the
   notebook only reads what was saved (`GET /merge_nudges`, `.../passage_suggestions`,
   `.../gaps`).
 - "Find more passages" on the Questions page calls `POST .../find_passages` once per
@@ -200,6 +220,10 @@ recorder, because the hosted backend can't store or transcribe audio
 - `ActivityPage` tags a row "You changed" or "You set aside" from two sets of kinds that mirror
   the `CHANGED` and `SET_ASIDE` buckets of `KINDS` in `backend/app/services/activity.py`.
   A new kind in either bucket must be added to both.
+- On the team pages everything a teammate made is read-only, and the page lede says so once.
+  Every teammate row shows `author.name`. A button that writes is disabled while any write on
+  the page runs, the page re-reads its route after each write, and the two paid buttons count
+  what is new by comparing the reload with what was there, not from the POST's answer.
 - `npm run lint` exits 0 with 2 warnings, both in `MemoPage.tsx` (set-state-in-effect,
   exhaustive-deps). Don't add new ones.
 

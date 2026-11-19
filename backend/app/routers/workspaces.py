@@ -16,9 +16,9 @@ from sqlalchemy.orm import Session
 
 from ..auth import CurrentUser, active_workspace, cortico_client_for, current_user
 from ..config import get_config
-from ..cortico.client import CorticoClient
 from ..db import CorticoSession, get_prototype_db
 from ..models_prototype import RLWorkspace
+from ..services.cortico_access import accessible_projects
 
 router = APIRouter(tags=["workspaces"])
 config = get_config()
@@ -34,17 +34,6 @@ class WorkspaceUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     project_ids: list[int] | None = Field(default=None, min_length=1)
     archived: bool | None = None
-
-
-def accessible_projects(client: CorticoClient, organization_id: int | None = None) -> tuple[dict, list[dict]]:
-    me = client.me()
-    roles = me.get("roles") or []
-    project_roles = {r["project_id"] for r in roles if r.get("project_id")}
-    org_roles = {r["organization_id"] for r in roles if r.get("organization_id") and not r.get("project_id")}
-    projects = client.projects(organization_id)
-    if roles:
-        projects = [p for p in projects if p["id"] in project_roles or p.get("organization_id") in org_roles]
-    return me, projects
 
 
 def _snapshot_projects(organization_id: int | None = None) -> tuple[list[dict], list[dict]]:

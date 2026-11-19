@@ -630,3 +630,119 @@ class RLCorticoGuide(PrototypeBase):
     project_id = Column(Integer, primary_key=True, autoincrement=False)
     questions_json = Column(Text, nullable=False, default="[]")  # [{id, text, shorthand_code, order_index}]
     fetched_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+# --- Team Page and team codebook (2026-11-18). New tables only. Every read of these goes
+# through services/team.py, which limits it to the viewer's conversations.
+
+
+class Adoption(PrototypeBase):
+    """That a user copied a teammate's object into their own work. Today only questions:
+    `source_id` is the teammate's research_question.id and `new_id` the viewer's copy."""
+
+    __tablename__ = "rl_adoption"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    kind = Column(String, nullable=False)  # question
+    source_id = Column(Integer, nullable=False)
+    source_user_id = Column(Integer, nullable=False)
+    new_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+class TeamQuestionGroup(PrototypeBase):
+    """Research questions of different people that ask the same thing. A group belongs to
+    nobody: whoever can see one of its questions can see and change it."""
+
+    __tablename__ = "rl_team_question_group"
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="active")  # suggested -> active | dismissed
+    created_by = Column(Integer)  # user id; null when the AI suggested it
+    ai_metadata = Column(Text)  # JSON: {model, reasoning_effort, prompt, requested_by}; null for user rows
+    rationale = Column(Text)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+
+    members = relationship("TeamQuestionMember", backref="group", cascade="all, delete-orphan")
+
+
+class TeamQuestionMember(PrototypeBase):
+    """A question in a group. One question is in at most one active group, which
+    services/team.py enforces (409), because a suggested group may overlap an active one."""
+
+    __tablename__ = "rl_team_question_member"
+    id = Column(Integer, primary_key=True)
+    group_id = Column(Integer, ForeignKey("rl_team_question_group.id"), nullable=False, index=True)
+    research_question_id = Column(Integer, ForeignKey("research_question.id"), nullable=False, index=True)
+    added_by = Column(Integer)  # user id; null when the AI suggested the group
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+class TeamTheme(PrototypeBase):
+    """A theme of the team codebook: a cluster of filed insights, from any author, under one
+    question group."""
+
+    __tablename__ = "rl_team_theme"
+    id = Column(Integer, primary_key=True)
+    group_id = Column(Integer, ForeignKey("rl_team_question_group.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    definition = Column(Text, nullable=False)
+    status = Column(String, nullable=False, default="suggested")  # suggested -> accepted | dismissed
+    ai_metadata = Column(Text)  # JSON: {model, reasoning_effort, prompt, requested_by}; null for user rows
+    created_by = Column(Integer)  # user id; null when the AI suggested it
+    updated_by = Column(Integer)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+
+    members = relationship("TeamThemeMember", backref="theme", cascade="all, delete-orphan")
+
+
+class TeamThemeMember(PrototypeBase):
+    __tablename__ = "rl_team_theme_member"
+    id = Column(Integer, primary_key=True)
+    theme_id = Column(Integer, ForeignKey("rl_team_theme.id"), nullable=False, index=True)
+    connection_id = Column(Integer, ForeignKey("reflection_connection.id"), nullable=False)
+
+
+class TeamThemeRevision(PrototypeBase):
+    """Snapshot of a theme taken before each user edit (name, definition, members), so a
+    removed member stays auditable although its rl_team_theme_member row is deleted."""
+
+    __tablename__ = "rl_team_theme_revision"
+    id = Column(Integer, primary_key=True)
+    theme_id = Column(Integer, ForeignKey("rl_team_theme.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    definition = Column(Text, nullable=False)
+    member_ids_json = Column(Text, nullable=False)  # JSON list of reflection_connection ids
+    edited_by = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+# --- Team Page hardening (2026-11-18, after review). New tables only: the six tables above
+# already exist in the hosted database, so their columns are frozen.
+
+
+class TeamAIRun(PrototypeBase):
+    """One time a paid team route went to the model. Saved before the call, so a second
+    request with the same input (a double click, another tab, a teammate) does not pay
+    again. `fingerprint` is the sha256 of exactly what was sent."""
+
+    __tablename__ = "rl_team_ai_run"
+    id = Column(Integer, primary_key=True)
+    kind = Column(String, nullable=False, index=True)  # groups | themes
+    group_id = Column(Integer, index=True)  # rl_team_question_group.id, for themes
+    user_id = Column(Integer, nullable=False)  # who asked
+    fingerprint = Column(String(64), nullable=False)
+    status = Column(String, nullable=False, default="running")  # running -> done | failed
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+class UserName(PrototypeBase):
+    """A user's display name as of their last sign-in. `rl_session` rows go when a session
+    ends, and a teammate's name on the team pages must outlive that."""
+
+    __tablename__ = "rl_user_name"
+    user_id = Column(Integer, primary_key=True, autoincrement=False)
+    display_name = Column(String, nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)

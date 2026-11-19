@@ -319,3 +319,61 @@ insights, merge nudges, "find more passages" and "what am I missing".
   `test_merge_nudges.py`, `test_question_levers.py`, plus three in
   `test_cortico_api_mode.py` (177 tests in all). None calls the model. Nothing was run
   against Postgres or the real Cortico API.
+
+## Team Page and team codebook backend (2026-11-18)
+
+- **Decision (the owner, 2026-11-18):** anything a user made on a conversation another user
+  can read is visible to that user, read-only, including highlight notes, insights and
+  reflection text. Set-aside items, review drafts, the activity log, hear-next lines and
+  undecided AI suggestions stay private. The personal pages are unchanged.
+- **New tables only:** `rl_adoption`, `rl_team_question_group`, `rl_team_question_member`,
+  `rl_team_theme`, `rl_team_theme_member`, `rl_team_theme_revision`. None collides with
+  `db/schema.sql`. No existing column changed.
+- **One module holds the access rule:** `services/team.py`. It was written after a review
+  found two cross-user leaks from reading the shared caches without a scope filter.
+- **Choices the spec left open:**
+  - An insight or highlight counts under a question only when the same person owns both.
+  - `filed_at` is the insight's `updated_at`; there is no column for when it was filed.
+  - A theme is hidden from a viewer who can see none of its members, so a theme built only
+    from another project's insights does not describe them to that viewer. A side effect:
+    a viewer who removes the last member they can see stops seeing the theme.
+  - Replacing a theme's members keeps the members outside the viewer's scope.
+  - A group whose last question is removed is seen by nobody; the row and its themes stay.
+  - A suggested group is visible to everyone who can see one of its questions, not only to
+    the user who asked the AI. `ai_metadata.requested_by` records who asked.
+- **Not measured:** no model was called. The two new prompts have never run against
+  Claude, so their output quality, token use and timing are unknown.
+- Tests: `test_team.py` (201 tests in all). The scope test was checked to fail with the
+  filter removed. Nothing was run against Postgres or the real Cortico API.
+
+## Team Page hardening after review (2026-11-18)
+
+An independent review found that the shared objects built on the row rule (group names and
+rationales, theme text, who-made-it fields, a question's project) could describe work a
+viewer cannot see. What changed:
+
+- **New tables only:** `rl_team_ai_run` and `rl_user_name`. The first six team tables had
+  already been created in the hosted database by a preview deployment, so their columns are
+  frozen.
+- A teammate's question is visible only through visible work filed under it. The
+  `project_id` branch is gone.
+- A theme is hidden from a viewer if it holds, or ever held, an insight outside their scope.
+  Earlier revisions count because a name written about a hidden insight stays after the
+  insight is taken out. The cost: such a theme never comes back for that viewer, even after
+  it is rewritten.
+- A group with a hidden question shows the first visible question's name and no rationale.
+  "Hidden" is literal: a member question that is archived, or that has lost its last filed
+  item, is hidden from everyone but its owner, so the typed name stops showing for them
+  until that question is taken out of the group.
+- The scope is re-checked against Cortico per session every `team.access_recheck_minutes`.
+  The cache is process memory, so on Vercel each warm function instance keeps its own and a
+  cold start asks again.
+- The two paid routes save a run row with a fingerprint first and do not repeat an
+  identical request.
+- **One group per question is checked, not constrained.** `_claim_for_active_group` locks
+  the question rows (Postgres) and re-reads memberships before the insert. There is no
+  unique constraint, because the member table's columns are frozen.
+- **Not measured:** no model was called, and nothing was run against Postgres or the real
+  Cortico API, so the row lock and the `/v2/me` plus `/v2/projects` lookup are untested there.
+- Tests: `test_team.py` has 10 tests (205 in all). Each guard in `services/team.py` was
+  turned off in turn and a test failed each time.

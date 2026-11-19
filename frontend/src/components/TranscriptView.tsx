@@ -9,6 +9,7 @@ import type {
   PassageSuggestion,
   ResearchQuestion,
   Snippet,
+  TeamHighlight,
 } from "../lib/types";
 import { clock, plural } from "../lib/format";
 import { Icon } from "../lib/ui";
@@ -20,6 +21,8 @@ interface Props {
   highlights: Highlight[];
   /** Highlights made in Cortico by other people and tools. Shown, never edited. */
   corticoHighlights: CorticoHighlight[];
+  /** Highlights teammates made here on this conversation. Shown, never edited. */
+  teamHighlights: TeamHighlight[];
   onCreateHighlight: (spans: HighlightSnippetSpan[], kind: HighlightKind) => void;
   onUpdateHighlight: (id: number, body: { starred?: boolean; notes?: string }) => void;
   onDeleteHighlight: (id: number) => void;
@@ -62,7 +65,7 @@ function highlightForWord(highlights: Highlight[], snippetId: number, wordIndex:
 }
 
 /** A highlight can span several speaker turns; its margin note sits beside the last one. */
-function lastSnippetIdForHighlight(h: Highlight, orderIndexBySnippetId: Map<number, number>): number {
+function lastSnippetIdForHighlight(h: { snippets: HighlightSnippetSpan[] }, orderIndexBySnippetId: Map<number, number>): number {
   return h.snippets.reduce((lastId, s) => {
     const a = orderIndexBySnippetId.get(s.snippet_id) ?? -1;
     const b = orderIndexBySnippetId.get(lastId) ?? -1;
@@ -75,7 +78,7 @@ const sectionName = (q: GuideQuestion) => q.shorthand_code ?? q.text;
 const inPassage = (passages: PassageSuggestion[], snippetId: number, wordIndex: number) =>
   passages.some((p) => p.snippet_id === snippetId && wordIndex >= p.start_index && wordIndex < p.end_index);
 
-const inCortico = (theirs: CorticoHighlight[], snippetId: number, wordIndex: number) =>
+const inTheirs = (theirs: { snippets: HighlightSnippetSpan[] }[], snippetId: number, wordIndex: number) =>
   theirs.some((h) =>
     h.snippets.some((sp) => sp.snippet_id === snippetId && wordIndex >= sp.start_index && wordIndex < sp.end_index)
   );
@@ -94,6 +97,39 @@ function CorticoNote({ highlight, onSeek }: { highlight: CorticoHighlight; onSee
         {onSeek && (
           <button className="linkb" onClick={() => onSeek(highlight.start_offset)}>
             Play from {clock(highlight.start_offset)}
+          </button>
+        )}
+      </p>
+    </aside>
+  );
+}
+
+function TeamNote({ highlight, playFrom, onSeek }: { highlight: TeamHighlight; playFrom: number | null; onSeek: ((seconds: number) => void) | null }) {
+  return (
+    <aside className="mnote team" data-team-highlight={highlight.highlight_id}>
+      <div className="top">
+        <span className="tag team">Teammate</span>
+        {highlight.starred && (
+          <span className="starred" role="img" aria-label="Starred" title="Starred">
+            <Icon name="star" fill />
+          </span>
+        )}
+      </div>
+      {highlight.notes && <p>{highlight.notes}</p>}
+      {highlight.question_names.length > 0 && (
+        <div className="mq">
+          {highlight.question_names.map((name) => (
+            <span className="chip" key={name} title={name}>
+              <span className="t">{name}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      <p className="by">
+        By {highlight.author.name}
+        {onSeek && playFrom !== null && (
+          <button className="linkb" onClick={() => onSeek(playFrom)}>
+            Play from {clock(playFrom)}
           </button>
         )}
       </p>
@@ -274,6 +310,7 @@ export default function TranscriptView({
   conversation,
   highlights,
   corticoHighlights,
+  teamHighlights,
   onCreateHighlight,
   onUpdateHighlight,
   onDeleteHighlight,
@@ -295,7 +332,7 @@ export default function TranscriptView({
   children,
 }: Props) {
   const [menu, setMenu] = useState<Menu | null>(null);
-  const [showCortico, setShowCortico] = useState(true);
+  const [showOthers, setShowOthers] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const orderIndexBySnippetId = new Map(conversation.snippets.map((s) => [s.snippet_id, s.order_index]));
@@ -305,6 +342,13 @@ export default function TranscriptView({
     if (q.checkpoint_snippet_id === null) continue;
     sectionsBySnippetId.set(q.checkpoint_snippet_id, [...(sectionsBySnippetId.get(q.checkpoint_snippet_id) ?? []), q]);
   }
+  const snippetById = new Map(conversation.snippets.map((s) => [s.snippet_id, s]));
+  const teammates = teamHighlights.filter((h) => h.snippets.length > 0);
+  // A teammate's highlight that was also written to Cortico comes back in both lists; the
+  // teammate's copy is the one shown.
+  const teamCorticoIds = new Set(teammates.filter((h) => h.cortico_id !== null).map((h) => String(h.cortico_id)));
+  const inCorticoOnly = corticoHighlights.filter((h) => !teamCorticoIds.has(String(h.cortico_id)));
+  const othersCount = teammates.length + inCorticoOnly.length;
   const unmarked = conversation.guide_questions.filter((q) => q.checkpoint_snippet_id === null);
   const armed = conversation.guide_questions.find((q) => q.guide_question_id === armedQuestionId) ?? null;
 
@@ -327,6 +371,18 @@ export default function TranscriptView({
     onSeek(usable ? start : s.start_offset);
     window.getSelection()?.removeAllRanges();
     setMenu(null);
+  }
+
+  /** Where a teammate's highlight starts in the audio, from its first word. */
+  function teamStart(h: TeamHighlight): number | null {
+    const first = h.snippets.reduce((a, b) =>
+      (orderIndexBySnippetId.get(b.snippet_id) ?? Infinity) < (orderIndexBySnippetId.get(a.snippet_id) ?? Infinity) ? b : a
+    );
+    const s = snippetById.get(first.snippet_id);
+    if (!s) return null;
+    const start = s.words[first.start_index]?.start;
+    const usable = typeof start === "number" && start >= s.start_offset - 1 && start <= s.end_offset + 1;
+    return usable ? start : s.start_offset;
   }
 
   function handleMouseUp(e: ReactMouseEvent) {
@@ -406,13 +462,13 @@ export default function TranscriptView({
         </ul>
       )}
 
-      {(onSeek || corticoHighlights.length > 0) && (
+      {(onSeek || othersCount > 0) && (
         <div className="tshint">
           {onSeek && <span>Double-click a word to play from there.</span>}
-          {corticoHighlights.length > 0 && (
+          {othersCount > 0 && (
             <label>
-              <input type="checkbox" checked={showCortico} onChange={(e) => setShowCortico(e.target.checked)} />
-              Show {plural(corticoHighlights.length, "highlight")} from Cortico
+              <input type="checkbox" checked={showOthers} onChange={(e) => setShowOthers(e.target.checked)} />
+              Show {plural(othersCount, "highlight")} from others
             </label>
           )}
         </div>
@@ -420,9 +476,11 @@ export default function TranscriptView({
 
       {conversation.snippets.map((s) => {
         const speaker = s.speaker_name ?? "Unknown speaker";
-        const theirs = showCortico
-          ? corticoHighlights.filter((h) => h.snippets.some((sp) => sp.snippet_id === s.snippet_id))
+        const theirs = showOthers
+          ? inCorticoOnly.filter((h) => h.snippets.some((sp) => sp.snippet_id === s.snippet_id))
           : [];
+        const team = showOthers ? teammates.filter((h) => h.snippets.some((sp) => sp.snippet_id === s.snippet_id)) : [];
+        const teamNotes = team.filter((h) => lastSnippetIdForHighlight(h, orderIndexBySnippetId) === s.snippet_id);
         // A highlight can span several turns; its note sits beside the last one.
         const theirNotes = theirs.filter((h) => h.snippets[h.snippets.length - 1].snippet_id === s.snippet_id);
         const notes = highlights.filter(
@@ -488,7 +546,13 @@ export default function TranscriptView({
                           {word}
                         </mark>
                       );
-                    if (theirs.length === 0 || !inCortico(theirs, s.snippet_id, i)) return word;
+                    if (team.length > 0 && inTheirs(team, s.snippet_id, i))
+                      return (
+                        <mark key={i} className="hl team">
+                          {word}
+                        </mark>
+                      );
+                    if (theirs.length === 0 || !inTheirs(theirs, s.snippet_id, i)) return word;
                     return (
                       <mark key={i} className="hl cortico">
                         {word}
@@ -502,7 +566,7 @@ export default function TranscriptView({
                   );
                 })}
               </p>
-              {(notes.length > 0 || found.length > 0 || theirNotes.length > 0) && (
+              {(notes.length > 0 || found.length > 0 || theirNotes.length > 0 || teamNotes.length > 0) && (
                 <div className="mnotes">
                   {notes.map((h) => (
                     <MarginNote
@@ -516,6 +580,9 @@ export default function TranscriptView({
                       onDelete={() => onDeleteHighlight(h.id)}
                       onRetrySync={() => onRetryHighlightSync(h.id)}
                     />
+                  ))}
+                  {teamNotes.map((h) => (
+                    <TeamNote key={h.highlight_id} highlight={h} playFrom={teamStart(h)} onSeek={onSeek} />
                   ))}
                   {theirNotes.map((h) => (
                     <CorticoNote key={h.cortico_id} highlight={h} onSeek={onSeek} />
