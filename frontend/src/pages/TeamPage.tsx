@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, errorText } from "../lib/api";
 import { plural, useToast } from "../lib/format";
-import { focusLater, personCounts, questionCounts } from "../lib/team";
+import { focusLater, personCounts, questionCounts, teamError } from "../lib/team";
 import type { TeamOverview, TeamQuestion, TeamQuestionGroup } from "../lib/types";
 import { AiMark } from "../lib/ui";
-import { Byline, TeamQuestionWork } from "../components/TeamParts";
+import { Byline, PickThenAct, TeamQuestionWork } from "../components/TeamParts";
 
 const QUESTIONS_HEADING = "team-questions";
 
@@ -55,16 +55,13 @@ function QuestionRow({
             </button>
           ))}
         {(others.length > 0 || groups.length > 0) && (
-          <select
-            className="inp pick"
-            aria-label={`Say that "${question.name}" is the same question as another`}
-            value=""
+          <PickThenAct
+            label={`Say that "${question.name}" is the same question as another`}
+            placeholder="Same question as…"
+            action="Group"
             disabled={busy}
-            onChange={(e) => {
-              if (e.target.value) onSameAs(e.target.value);
-            }}
+            onPick={onSameAs}
           >
-            <option value="">Same question as…</option>
             {groups.length > 0 && (
               <optgroup label="A group">
                 {groups.map((g) => (
@@ -83,7 +80,7 @@ function QuestionRow({
                 ))}
               </optgroup>
             )}
-          </select>
+          </PickThenAct>
         )}
       </div>
       <div className="tqwork" id={`team-q-work-${id}`} hidden={!open}>
@@ -150,11 +147,17 @@ export default function TeamPage() {
     setError(null);
     try {
       await action();
-      await load();
+      // Shown as saved only on fresh data: an edit built from the old page would undo this one.
+      if (!(await load())) {
+        setData(null);
+        return;
+      }
       toast(done);
       focusLater(focusId);
     } catch (e) {
-      setError(errorText(e));
+      setError(teamError(e));
+      // The page was out of date (a teammate got there first), so show what is true now.
+      await load();
     } finally {
       setBusy(false);
     }
@@ -175,22 +178,23 @@ export default function TeamPage() {
 
   async function look() {
     setLooking(true);
+    setBusy(true);
     setLookError(null);
     setLookNote(null);
-    const before = new Set(suggested.map((g) => g.id));
     try {
-      await api.suggestTeamQuestionGroups();
-      const next = await load();
-      const fresh = next ? next.groups.filter((g) => g.status === "suggested" && !before.has(g.id)).length : 0;
+      const made = await api.suggestTeamQuestionGroups();
+      await load();
+      const fresh = made.length;
       setLookNote(
         fresh === 0
           ? "No questions looked alike enough to group."
           : `${plural(fresh, "possible match", "possible matches")} below. Nothing is grouped until you say so.`
       );
     } catch (e) {
-      setLookError(errorText(e));
+      setLookError(teamError(e));
     } finally {
       setLooking(false);
+      setBusy(false);
     }
   }
 

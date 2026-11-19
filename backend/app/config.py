@@ -74,6 +74,9 @@ class TeamConfig(BaseModel):
     model: str = "claude-haiku-5-5"  # matching questions across people; themes use ai_review's model
     reasoning_effort: str = "low"
     max_new_themes_per_run: int = 3
+    max_suggested_themes: int = 6  # undecided suggested themes per group; at the cap, no call
+    # How long a session's "which projects can this account reach" answer is reused.
+    access_recheck_minutes: float = 5
 
 
 class CorticoWriteBackConfig(BaseModel):

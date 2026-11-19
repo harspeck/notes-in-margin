@@ -3,10 +3,10 @@ import type { FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, errorText } from "../lib/api";
 import { plural, shortDate, useToast } from "../lib/format";
-import { focusLater, questionCounts } from "../lib/team";
+import { focusLater, questionCounts, teamError } from "../lib/team";
 import type { TeamGroupDetail, TeamInsight, TeamTheme, TeamThemeRevision } from "../lib/types";
 import { AiMark } from "../lib/ui";
-import { Byline, TeamInsightCard } from "../components/TeamParts";
+import { Byline, PickThenAct, TeamInsightCard } from "../components/TeamParts";
 
 const THEMES_HEADING = "team-themes";
 
@@ -124,6 +124,7 @@ function ThemeCard({
     if (definition.trim() !== theme.definition) body.definition = definition.trim();
     if (Object.keys(body).length === 0) {
       setEditing(false);
+      focusLater(headingId);
       return;
     }
     if (await run(() => api.updateTeamTheme(theme.id, body), "Saved. The earlier wording is in its history.", headingId)) {
@@ -191,10 +192,7 @@ function ThemeCard({
         onRemove={async (i) => {
           const done = await run(
             () =>
-              api.setTeamThemeMembers(
-                theme.id,
-                theme.member_connection_ids.filter((id) => id !== i.connection_id)
-              ),
+              api.removeTeamThemeMember(theme.id, i.connection_id),
             "Taken out of the theme. The insight itself is unchanged.",
             headingId
           );
@@ -212,7 +210,7 @@ function ThemeCard({
         </button>
       </div>
       <div id={`team-theme-history-${theme.id}`} hidden={!history}>
-        {history && <ThemeHistory key={edits} themeId={theme.id} />}
+        {history && <ThemeHistory key={`${edits}-${theme.updated_at}`} themeId={theme.id} />}
       </div>
     </div>
   );
@@ -341,12 +339,18 @@ function Codebook({ groupId }: { groupId: number }) {
     setError(null);
     try {
       await action();
-      await load();
+      // Shown as saved only on fresh data: an edit built from the old page would undo this one.
+      if (!(await load())) {
+        setData(null);
+        return true;
+      }
       toast(done);
       focusLater(focusId);
       return true;
     } catch (e) {
-      setError(errorText(e));
+      setError(teamError(e));
+      // The page was out of date (a teammate got there first), so show what is true now.
+      await load();
       return false;
     } finally {
       setBusy(false);
@@ -355,22 +359,23 @@ function Codebook({ groupId }: { groupId: number }) {
 
   async function suggest() {
     setSuggesting(true);
+    setBusy(true);
     setSuggestError(null);
     setSuggestNote(null);
-    const before = new Set(suggested.map((t) => t.id));
     try {
-      await api.synthesizeTeamThemes(groupId);
-      const next = await load();
-      const fresh = next ? next.themes.filter((t) => t.status === "suggested" && !before.has(t.id)).length : 0;
+      const made = await api.synthesizeTeamThemes(groupId);
+      await load();
+      const fresh = made.length;
       setSuggestNote(
         fresh === 0
           ? "No new themes came out of these insights."
           : `${plural(fresh, "suggested theme")} below. Keep the ones that fit.`
       );
     } catch (e) {
-      setSuggestError(errorText(e));
+      setSuggestError(teamError(e));
     } finally {
       setSuggesting(false);
+      setBusy(false);
     }
   }
 
@@ -379,6 +384,7 @@ function Codebook({ groupId }: { groupId: number }) {
     const name = groupName.trim();
     if (!name || name === group.name) {
       setRenaming(false);
+      focusLater("team-group-name");
       return;
     }
     if (await run(() => api.renameTeamQuestionGroup(group.id, name), "Renamed.", "team-group-name")) setRenaming(false);
@@ -398,7 +404,8 @@ function Codebook({ groupId }: { groupId: number }) {
       await load();
       focusLater("team-group-questions");
     } catch (err) {
-      setError(errorText(err));
+      setError(teamError(err));
+      await load();
     } finally {
       setBusy(false);
     }
@@ -421,7 +428,14 @@ function Codebook({ groupId }: { groupId: number }) {
           <button className="btn small" disabled={busy || !groupName.trim()}>
             Save
           </button>
-          <button type="button" className="btn quiet small" onClick={() => setRenaming(false)}>
+          <button
+            type="button"
+            className="btn quiet small"
+            onClick={() => {
+              setRenaming(false);
+              focusLater("team-group-name");
+            }}
+          >
             Cancel
           </button>
         </form>
@@ -526,7 +540,10 @@ function Codebook({ groupId }: { groupId: number }) {
           <AddTheme
             insights={data.insights}
             busy={busy}
-            onCancel={() => setAdding(false)}
+            onCancel={() => {
+              setAdding(false);
+              focusLater(THEMES_HEADING);
+            }}
             onAdd={async (body) => {
               if (await run(() => api.createTeamTheme(groupId, body), "Theme added.", THEMES_HEADING)) setAdding(false);
             }}
@@ -585,29 +602,27 @@ function Codebook({ groupId }: { groupId: number }) {
           <div key={i.connection_id} style={{ marginBottom: 16 }}>
             <TeamInsightCard insight={i} />
             {accepted.length > 0 && (
-              <select
-                className="inp pick"
-                style={{ marginTop: -8 }}
-                aria-label={`Add the insight "${i.insight_text}" to a theme`}
-                value=""
+              <PickThenAct
+                label={`Add the insight "${i.insight_text}" to a theme`}
+                placeholder="Add to a theme…"
+                action="Add"
                 disabled={busy}
-                onChange={(e) => {
-                  const theme = accepted.find((t) => t.id === Number(e.target.value));
+                onPick={(value) => {
+                  const theme = accepted.find((t) => t.id === Number(value));
                   if (theme)
                     run(
-                      () => api.setTeamThemeMembers(theme.id, [...theme.member_connection_ids, i.connection_id]),
+                      () => api.addTeamThemeMember(theme.id, i.connection_id),
                       `Added to "${theme.name}".`,
                       "team-loose"
                     );
                 }}
               >
-                <option value="">Add to a theme…</option>
                 {accepted.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}
                   </option>
                 ))}
-              </select>
+              </PickThenAct>
             )}
           </div>
         ))}

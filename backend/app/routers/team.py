@@ -14,6 +14,7 @@ from ..schemas import (
     TeamQuestionGroupCreate,
     TeamQuestionGroupUpdate,
     TeamThemeCreate,
+    TeamThemeMemberAdd,
     TeamThemeMembersUpdate,
     TeamThemeUpdate,
 )
@@ -79,8 +80,11 @@ def get_question_group(group_id: int, include_dismissed: bool = False, view: tea
 
 
 @router.patch("/team/question_groups/{group_id}")
-def update_question_group(group_id: int, body: TeamQuestionGroupUpdate, view: team.TeamView = Depends(_view)):
-    return team.rename_group(view, group_id, body.name)
+def update_question_group(
+    group_id: int, body: TeamQuestionGroupUpdate, view: team.TeamView = Depends(_view),
+    user: CurrentUser = Depends(current_user),
+):
+    return team.rename_group(view, user, group_id, body.name)
 
 
 @router.post("/team/question_groups/{group_id}/questions")
@@ -137,6 +141,21 @@ def set_theme_members(
     user: CurrentUser = Depends(current_user),
 ):
     return team.set_theme_members(view, user, theme_id, body.connection_ids)
+
+
+@router.post("/team/themes/{theme_id}/members")
+def add_theme_member(
+    theme_id: int, body: TeamThemeMemberAdd, view: team.TeamView = Depends(_view),
+    user: CurrentUser = Depends(current_user),
+):
+    return team.add_theme_member(view, user, theme_id, body.connection_id)
+
+
+@router.delete("/team/themes/{theme_id}/members/{connection_id}")
+def remove_theme_member(
+    theme_id: int, connection_id: int, view: team.TeamView = Depends(_view), user: CurrentUser = Depends(current_user)
+):
+    return team.remove_theme_member(view, user, theme_id, connection_id)
 
 
 @router.post("/team/themes/{theme_id}/accept")

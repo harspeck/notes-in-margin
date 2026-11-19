@@ -44,7 +44,7 @@ Snapshot facts the code depends on (`docs/prototype-log.md`):
 `rl_activity`, `rl_highlight_question`, `rl_insight_move`, `rl_insight_merge`,
 `rl_merge_nudge`, `rl_passage_suggestion`, `rl_question_gap`, `rl_cortico_guide`,
 `rl_adoption`, `rl_team_question_group`, `rl_team_question_member`, `rl_team_theme`,
-`rl_team_theme_member`, `rl_team_theme_revision`.
+`rl_team_theme_member`, `rl_team_theme_revision`, `rl_team_ai_run`, `rl_user_name`.
 
 `rl_rq_focus` to `rl_code_family_revision` back the Organize page (2026-10-26). They carry the `rl_` prefix because
 `codebook`, `code` and `coding` already exist in `db/schema.sql`. They were added as new
@@ -92,11 +92,20 @@ limits it to the viewer's conversations (`docs/architecture/routers.md`, "Team")
 | Table | Key columns | Purpose |
 |---|---|---|
 | `rl_adoption` | `id`, `user_id`, `kind` (`question`), `source_id`, `source_user_id`, `new_id`, `created_at` | That a user copied a teammate's question into their own (`POST /team/questions/{id}/adopt`). `source_id` is the teammate's `research_question.id`, `new_id` the copy. One per user and source, enforced in code (409). |
-| `rl_team_question_group` | `id`, `name`, `status` (`suggested`, `active` or `dismissed`), `created_by` (null when the AI suggested it), `ai_metadata` (null for user rows; holds `requested_by`), `rationale`, `created_at`, `updated_at` | Questions of different people that ask the same thing. Belongs to nobody. |
+| `rl_team_question_group` | `id`, `name` (empty unless someone typed one; the name shown is worked out per viewer), `status` (`suggested`, `active` or `dismissed`), `created_by` (null when the AI suggested it), `ai_metadata` (null for user rows; holds `requested_by`), `rationale`, `created_at`, `updated_at` | Questions of different people that ask the same thing. Belongs to nobody. |
 | `rl_team_question_member` | `id`, `group_id`, `research_question_id`, `added_by`, `created_at` | A question in a group. A question is in at most one `active` group, enforced in code (409), because a `suggested` group may overlap an active one. Removing a question from a group deletes the row; it is not audit data. |
 | `rl_team_theme` | `id`, `group_id`, `name`, `definition`, `status` (`suggested`, `accepted` or `dismissed`), `ai_metadata`, `created_by` (null for the AI), `updated_by`, `created_at`, `updated_at` | A theme of the team codebook under one question group. |
 | `rl_team_theme_member` | `id`, `theme_id`, `connection_id` | A filed insight, by any author, in a theme. |
 | `rl_team_theme_revision` | `id`, `theme_id`, `name`, `definition`, `member_ids_json`, `edited_by`, `created_at` | The theme as it was before each user edit of its name, definition or members. |
+
+These six tables were created in the hosted database by a preview deployment, so their
+columns are frozen: anything more goes in a new table. Two were added after review, with no
+column changed:
+
+| Table | Key columns | Purpose |
+|---|---|---|
+| `rl_team_ai_run` | `id`, `kind` (`groups` or `themes`), `group_id` (themes), `user_id` (who asked), `fingerprint` (sha256 of exactly what was sent), `status` (`running`, `done` or `failed`), `created_at` | One row each time a paid team route goes to the model, committed before the call. The newest row of a kind (and group) with the same fingerprint that did not fail stops a repeat call. |
+| `rl_user_name` | `user_id` (PK), `display_name`, `updated_at` | A user's name as of their last sign-in, written by `create_session` (`app/auth.py`). The team pages read it first, so a teammate keeps their name after their session ends. |
 
 `reflection_connection.status` gained the value `merged` (an insight folded into another by
 `rl_insight_merge`). No column changed: the status column is a plain string.
@@ -130,7 +139,8 @@ string (the column is NOT NULL), with `duration` null, `transcription_raw` null 
   - `connection_evidence` rows replaced by an evidence edit or removed by undoing an
     insight merge, which are audited by the `reflection_connection_revision` written first;
   - `rl_highlight_question` rows, which are not audit data;
-  - an `rl_team_theme_member` row removed by `PUT /team/themes/{id}/members`, which is
+  - an `rl_team_theme_member` row removed by `PUT /team/themes/{id}/members` or
+    `DELETE /team/themes/{id}/members/{connection_id}`, which is
     audited by the `rl_team_theme_revision` row written before it, and an
     `rl_team_question_member` row, which is not audit data.
 - An insight merge never deletes the source's evidence. The target gets copies, and

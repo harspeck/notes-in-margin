@@ -24,7 +24,7 @@ from .cortico.client import CorticoClient
 from .cortico.errors import CorticoAuthError
 from .cortico.source import ApiSource, CorticoSource, SnapshotSource
 from .db import CorticoSession, get_prototype_db
-from .models_prototype import RLSession, RLWorkspace
+from .models_prototype import RLSession, RLWorkspace, UserName
 
 config = get_config()
 ACCESS_TOKEN_FALLBACK_TTL = timedelta(minutes=15)
@@ -110,6 +110,12 @@ def create_session(db: Session, tokens: dict, me: dict) -> str:
             expires_at=_now() + timedelta(days=config.session.max_age_days),
         )
     )
+    if name:
+        remembered = db.get(UserName, me["id"])
+        if remembered is None:
+            db.add(UserName(user_id=me["id"], display_name=name))
+        else:
+            remembered.display_name = name
     db.commit()
     return token
 

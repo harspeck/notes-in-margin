@@ -717,3 +717,32 @@ class TeamThemeRevision(PrototypeBase):
     member_ids_json = Column(Text, nullable=False)  # JSON list of reflection_connection ids
     edited_by = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+# --- Team Page hardening (2026-11-18, after review). New tables only: the six tables above
+# already exist in the hosted database, so their columns are frozen.
+
+
+class TeamAIRun(PrototypeBase):
+    """One time a paid team route went to the model. Saved before the call, so a second
+    request with the same input (a double click, another tab, a teammate) does not pay
+    again. `fingerprint` is the sha256 of exactly what was sent."""
+
+    __tablename__ = "rl_team_ai_run"
+    id = Column(Integer, primary_key=True)
+    kind = Column(String, nullable=False, index=True)  # groups | themes
+    group_id = Column(Integer, index=True)  # rl_team_question_group.id, for themes
+    user_id = Column(Integer, nullable=False)  # who asked
+    fingerprint = Column(String(64), nullable=False)
+    status = Column(String, nullable=False, default="running")  # running -> done | failed
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+
+class UserName(PrototypeBase):
+    """A user's display name as of their last sign-in. `rl_session` rows go when a session
+    ends, and a teammate's name on the team pages must outlive that."""
+
+    __tablename__ = "rl_user_name"
+    user_id = Column(Integer, primary_key=True, autoincrement=False)
+    display_name = Column(String, nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)

@@ -90,3 +90,5 @@ team:
   model: "claude-haiku-5-5"
   reasoning_effort: "low"
   max_new_themes_per_run: 3
+  max_suggested_themes: 6
+  access_recheck_minutes: 5

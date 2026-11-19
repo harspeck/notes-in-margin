@@ -196,3 +196,7 @@ class TeamThemeUpdate(BaseModel):
 
 class TeamThemeMembersUpdate(BaseModel):
     connection_ids: list[int]
+
+
+class TeamThemeMemberAdd(BaseModel):
+    connection_id: int

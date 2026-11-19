@@ -25,6 +25,7 @@ const CHANGED_KINDS = new Set([
   "insights_merged",
   "insight_merge_undone",
   "team_theme_edited",
+  "team_group_renamed",
 ]);
 const SET_ASIDE_KINDS = new Set([
   "insight_set_aside",

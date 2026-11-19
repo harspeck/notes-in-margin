@@ -113,18 +113,20 @@ mode every route below the `auth` rows answers 401 without a session.
 | | `GET /team/people/{user_id}` | `get_team_person` (their reflections and questions; 404 unless they have a visible row) |
 | | `GET /conversations/{conversation_id}/team_highlights` | `list_team_highlights` (other users' highlights on the conversation, never the viewer's own; 404 unless the conversation is in scope) |
 | | `POST /team/questions/{rq_id}/adopt` | `adopt_question` (copies a teammate's question into the viewer's own through `questions.create_question`, writes `rl_adoption`; 409 if already adopted or already the viewer's; returns what `POST /research_questions` returns) |
-| | `POST /team/question_groups` | `create_question_group` (body `{name?, research_question_ids}`, at least one, all visible; an `active` group named after the first question by default; 409 if a question is already in an active group) |
-| | `POST /team/question_groups/suggest` | `suggest_question_groups` (**paid**, one call on `team.model`; returns the `suggested` groups this run created, `[]` without a call when fewer than two ungrouped questions are visible) |
+| | `POST /team/question_groups` | `create_question_group` (body `{name?, research_question_ids}`, at least one, all visible; an `active` group, with no name stored unless one is given; 409 if a question is already in an active group) |
+| | `POST /team/question_groups/suggest` | `suggest_question_groups` (**paid**, one call on `team.model`; returns the `suggested` groups this run created; `[]` without a call when fewer than two visible questions are in no active or suggested group, or the newest run was sent the same) |
 | | `GET /team/question_groups/{group_id}?include_dismissed=` | `get_question_group` (the group, its visible questions, every visible filed insight under them, and its themes; dismissed themes only when asked) |
-| | `PATCH /team/question_groups/{group_id}` | `update_question_group` (body `{name?}`; 422 for an empty name) |
+| | `PATCH /team/question_groups/{group_id}` | `update_question_group` (body `{name?}`; 422 for an empty name; 409 when one of the group's questions is hidden from the viewer) |
 | | `POST /team/question_groups/{group_id}/questions` | `add_question_to_group` (body `{research_question_id}`; 409 if the question is in another active group, or the group is still `suggested`) |
-| | `DELETE /team/question_groups/{group_id}/questions/{rq_id}` | `remove_question_from_group` (404 if the question is not a visible member) |
-| | `POST /team/question_groups/{group_id}/accept` | `accept_question_group` (a `suggested` group becomes `active`; 409 if one of its questions has joined another active group, or it was dismissed) |
+| | `DELETE /team/question_groups/{group_id}/questions/{rq_id}` | `remove_question_from_group` (404 if the question is not a visible member; 409 on a `suggested` group) |
+| | `POST /team/question_groups/{group_id}/accept` | `accept_question_group` (a `suggested` group becomes `active`; 409 if fewer than two of its questions are still open, one has joined another active group, or it was dismissed) |
 | | `POST /team/question_groups/{group_id}/dismiss` | `dismiss_question_group` ("keep separate"; 409 on an active group) |
-| | `POST /team/question_groups/{group_id}/themes/synthesize` | `synthesize_themes` (**paid**, one call on `ai_review.model`; returns the `suggested` themes this run created, `[]` without a call when the group has no visible filed insight) |
+| | `POST /team/question_groups/{group_id}/themes/synthesize` | `synthesize_themes` (**paid**, one call on `ai_review.model`; returns the `suggested` themes this run created; `[]` without a call when the group has no visible filed insight, is at `team.max_suggested_themes`, or the newest run for it was sent the same) |
 | | `POST /team/question_groups/{group_id}/themes` | `create_theme` (body `{name, definition, connection_ids}`; made by hand, so `accepted`; 422 for an insight that is not a visible filed insight of the group) |
 | | `PATCH /team/themes/{theme_id}` | `update_theme` (body `{name?, definition?}`; writes `rl_team_theme_revision` first) |
-| | `PUT /team/themes/{theme_id}/members` | `set_theme_members` (body `{connection_ids}`; replaces the members the viewer can see, after a revision; 422 as for create) |
+| | `PUT /team/themes/{theme_id}/members` | `set_theme_members` (body `{connection_ids}`; replaces the member list, after a revision; 422 as for create) |
+| | `POST /team/themes/{theme_id}/members` | `add_theme_member` (body `{connection_id}`; adds one insight after a revision; adding one already there changes nothing; 422 as for create) |
+| | `DELETE /team/themes/{theme_id}/members/{connection_id}` | `remove_theme_member` (removes one insight after a revision; removing one not there changes nothing; 422 for an insight that is neither a member nor a visible filed insight of the group) |
 | | `POST /team/themes/{theme_id}/accept`, `POST /team/themes/{theme_id}/dismiss` | `accept_theme`, `dismiss_theme` (a status change; the row is kept) |
 | | `GET /team/themes/{theme_id}/history` | `get_theme_history` (revisions, newest first) |
 
@@ -292,28 +294,43 @@ gap's `ai_metadata` plus `origin: "question_gap"` and `question_gap_id`.
 Every route in `routers/team.py` builds a `TeamView` with `team.load_view` and reads only
 through `backend/app/services/team.py`. That module holds the access rule:
 
-- **Scope:** the conversations of the viewer's active workspace in `cortico_api` mode (from
-  the cached listing, `scope_conversations`; empty with no workspace), and every
-  conversation in `snapshot` mode.
+- **Scope:** every conversation in `snapshot` mode. In `cortico_api` mode, the conversations
+  of the viewer's active workspace (from the cached listing, `scope_conversations`), limited
+  to the projects the viewer's Cortico account can reach now. That is asked of Cortico
+  (`services/cortico_access.py`: `/v2/me` and `/v2/projects`) at most once per session every
+  `team.access_recheck_minutes`, and kept in process memory under the session's token hash. A
+  Cortico failure fails the request (503, `source: "cortico"`); there is no unchecked
+  fallback. With no workspace nothing is in scope and nothing is visible, the viewer's own
+  questions included.
 - **Visible rows:** a highlight or reflection whose conversation is in scope; an insight
-  whose reflection's conversation is in scope and whose status is `accepted` or `edited`; a
-  question that is not archived and either has a visible insight or highlight filed under it
-  (through question merges, and only rows by the question's own author) or belongs to one of
-  the workspace's projects (always, in snapshot mode).
+  whose reflection's conversation is in scope and whose status is `accepted` or `edited`.
+- **Questions:** a teammate's question is visible only when a visible insight or highlight is
+  filed under it (through question merges, and only rows by the question's own author). Its
+  `project_id` plays no part. The viewer's own open questions are always visible to the viewer.
 - **Text:** evidence and highlight text is returned only for snippets whose own conversation
   is in scope, and conversation titles come from the scope, because the snippet and
   conversation caches are shared by every user.
 - **Everything else answers 404**, like a row that does not exist. An insight id in a body
-  that is outside the scope answers 422, the same as one that does not exist.
+  or path that is outside the scope answers 422, the same as one that does not exist.
 - Set-aside, suggested and merged insights, review drafts, the activity log, hear-next lines
   and a user's own undecided AI suggestions are never returned.
-- A question group is visible to whoever can see one of its questions, and they see only
-  those questions and the insights under them. A theme is visible when it has no members or
-  the viewer can see at least one. Anyone who can see a group or theme may change it.
+- **Groups:** a question group is visible to whoever can see one of its questions, and they
+  see only those questions and the insights under them. When any of its questions is hidden
+  from the viewer, `name` is the first visible question's name and `rationale` is null, and
+  renaming answers 409. A group nobody named stores an empty name and shows the first
+  visible question's name to everyone.
+- **Themes:** a theme is visible only when every insight it holds, or held at any earlier
+  revision, is on a conversation in the viewer's scope. One that never had a member is
+  visible with its group. A member that is in scope but no longer filed stays stored and is
+  left out of `member_connection_ids`. Anyone who can see a group or theme may change it.
+- **Who made it:** `created_by`, `updated_by` and `edited_by` are an author only when that
+  user is in the viewer's people; otherwise null.
+- **Messages:** every 4xx `detail` from these routes is a plain sentence with no bare id, and
+  a 409 names a question only when the viewer can see it, because the page shows it as is.
 
-Every teammate row carries `author: {user_id, name, is_you}`. The name is `display_name` of
-the user's newest `rl_session` row, or `Teammate <id>`; in snapshot mode the viewer is
-`You`. An email is never returned. All timestamps go through `iso_utc`.
+Every teammate row carries `author: {user_id, name, is_you}`. The name is the one kept in
+`rl_user_name` at the user's last sign-in, then `display_name` of their newest `rl_session`
+row, then `Teammate <id>`; in snapshot mode the viewer is `You`. An email is never returned. All timestamps go through `iso_utc`.
 
 `GET /team`:
 
@@ -328,16 +345,15 @@ the user's newest `rl_session` row, or `Teammate <id>`; in snapshot mode the vie
   "conversation_count": int }
 ```
 
-- People are everyone with a visible highlight, reflection, insight or question, plus the
-  viewer. Counts cover the scope only. `conversations_opened` counts `rl_reading_state`
+- People are everyone with a visible highlight, reflection or insight, plus the viewer. Counts cover the scope only. `conversations_opened` counts `rl_reading_state`
   rows in scope; `reflection_count` counts reflections with status `ready_for_review` or
   `filed`.
 - A question's `conversation_count` is the distinct conversations of its insights'
-  reflections and its highlights. `group_id` is the `active` group it is in; a `suggested`
-  group does not set it.
+  reflections and its highlights. `group_id` is the `active` group that holds it (the lowest id, if a
+  question merge left it in two); a `suggested` group does not set it.
 - `question_ids` holds only the questions the viewer can see. `theme_count` counts the
   visible `suggested` and `accepted` themes. `created_by` is null for a group the AI
-  suggested.
+  suggested, and for one made by someone who is not in the viewer's people.
 
 `GET /team/questions/{rq_id}`:
 
@@ -379,19 +395,26 @@ same highlight out of the "In Cortico" layer.
 ```
 { "group": { ...as in groups... }, "questions": [ ...as above... ],
   "insights": [ ...as in the question detail, for every visible member question... ],
-  "themes": [ { "id", "name", "definition", "status", "created_by": author | null,
+  "themes": [ { "id", "name", "definition", "status", "created_by": author | null,   // null also for someone outside the viewer's people
                 "updated_by": author | null, "updated_at", "member_connection_ids": [int] } ] }
 ```
 
 The group routes that change a group return the group object, the theme routes return the
 theme object, and the two paid routes return a list of the rows they created.
-`member_connection_ids` holds only insights the viewer can see, and
-`PUT /team/themes/{id}/members` leaves members outside the viewer's scope in place.
+`PUT /team/themes/{id}/members` replaces the whole list. `POST /team/themes/{id}/members`
+(body `{connection_id}`) and `DELETE /team/themes/{id}/members/{connection_id}` change one
+insight, so two people editing one theme cannot undo each other; a repeat changes nothing
+and writes no revision.
+
+The two paid routes return `[]` without calling the model when there is nothing to send,
+when the newest `rl_team_ai_run` of that kind (and group, for themes) was sent exactly the
+same and did not fail, and, for themes, when the group already has
+`team.max_suggested_themes` undecided suggestions.
 
 `GET /team/themes/{theme_id}/history`:
 
 ```
-[ { "id", "name", "definition", "member_connection_ids": [int], "edited_by": author,
+[ { "id", "name", "definition", "member_connection_ids": [int], "edited_by": author | null,
     "created_at" } ]     // the theme as it was before each edit, newest first
 ```
 
@@ -480,16 +503,17 @@ lists every kind in `KINDS`, with its filter bucket, and its docstring says how 
 | `team_group_created` | user | | `team.create_group`, `team.accept_group` | `team_group_id`, `research_question_ids` |
 | `team_groups_suggested` | ai | | `team.suggest_groups` | `count`, `team_group_ids` |
 | `team_group_dismissed` | user | set_aside | `team.dismiss_group` | `team_group_id` |
+| `team_group_renamed` | user | changed | `team.rename_group` (only when the name changes) | `team_group_id` |
 | `team_themes_suggested` | ai | | `team.synthesize_themes` | `team_group_id`, `count`, `team_theme_ids` |
 | `team_theme_accepted` | user | | `team.create_theme`, `team.decide_theme` | `team_theme_id`, `team_group_id` |
-| `team_theme_edited` | user | changed | `team.update_theme`, `team.set_theme_members` | `team_theme_id`, `team_group_id` |
+| `team_theme_edited` | user | changed | `team.update_theme`, `team.set_theme_members`, `team.add_theme_member`, `team.remove_theme_member` | `team_theme_id`, `team_group_id` |
 | `team_theme_dismissed` | user | set_aside | `team.decide_theme` | `team_theme_id`, `team_group_id` |
 
 Accepting a merge nudge writes the merge's own row (`rq_merged` or `insights_merged`), and
 `rq_reworded` when the suggested wording is applied.
 
 Team rows are logged for the user who acted (or asked the AI), not for the teammates whose
-work is involved. Not logged: renaming a question group, adding or removing its questions,
+work is involved. Not logged: adding a question to a group or removing one,
 unstarring, family renames, member changes and family merges, merge-suggestion
 decisions, creating, editing or deleting a highlight, reorders, and workspace changes. A repeat of a decision that changes
 nothing (accepting an accepted next step) writes no row.

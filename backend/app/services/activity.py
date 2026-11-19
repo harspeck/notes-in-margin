@@ -72,6 +72,7 @@ QUESTION_ADOPTED = "question_adopted"
 TEAM_GROUP_CREATED = "team_group_created"
 TEAM_GROUPS_SUGGESTED = "team_groups_suggested"
 TEAM_GROUP_DISMISSED = "team_group_dismissed"
+TEAM_GROUP_RENAMED = "team_group_renamed"
 TEAM_THEMES_SUGGESTED = "team_themes_suggested"
 TEAM_THEME_ACCEPTED = "team_theme_accepted"
 TEAM_THEME_EDITED = "team_theme_edited"
@@ -125,6 +126,7 @@ KINDS: dict[str, str] = {
     QUESTION_ADOPTED: OTHER,
     TEAM_GROUP_CREATED: OTHER,
     TEAM_GROUP_DISMISSED: SET_ASIDE,
+    TEAM_GROUP_RENAMED: CHANGED,
     TEAM_THEME_ACCEPTED: OTHER,
     TEAM_THEME_EDITED: CHANGED,
     TEAM_THEME_DISMISSED: SET_ASIDE,

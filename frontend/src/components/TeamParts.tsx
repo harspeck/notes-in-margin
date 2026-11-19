@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api, errorText } from "../lib/api";
 import type { TeamAuthor, TeamInsight, TeamQuestionDetail } from "../lib/types";
@@ -110,5 +111,43 @@ export function TeamQuestionWork({ rqId }: { rqId: number }) {
         </>
       )}
     </>
+  );
+}
+
+/** A menu and a button to act on it. A bare select that acted on change would commit the
+ * first option as soon as a keyboard user pressed the down arrow. */
+export function PickThenAct({
+  label,
+  placeholder,
+  action,
+  disabled,
+  onPick,
+  children,
+}: {
+  label: string;
+  placeholder: string;
+  action: string;
+  disabled: boolean;
+  onPick: (value: string) => void;
+  children: ReactNode;
+}) {
+  const [value, setValue] = useState("");
+  return (
+    <span className="pickact">
+      <select className="inp pick" aria-label={label} value={value} disabled={disabled} onChange={(e) => setValue(e.target.value)}>
+        <option value="">{placeholder}</option>
+        {children}
+      </select>
+      <button
+        className="btn quiet small"
+        disabled={disabled || !value}
+        onClick={() => {
+          onPick(value);
+          setValue("");
+        }}
+      >
+        {action}
+      </button>
+    </span>
   );
 }

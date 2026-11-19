@@ -346,3 +346,34 @@ insights, merge nudges, "find more passages" and "what am I missing".
 - Tests: `test_team.py` (201 tests in all). The scope test was checked to fail with the
   filter removed. Nothing was run against Postgres or the real Cortico API.
 
+## Team Page hardening after review (2026-11-18)
+
+An independent review found that the shared objects built on the row rule (group names and
+rationales, theme text, who-made-it fields, a question's project) could describe work a
+viewer cannot see. What changed:
+
+- **New tables only:** `rl_team_ai_run` and `rl_user_name`. The first six team tables had
+  already been created in the hosted database by a preview deployment, so their columns are
+  frozen.
+- A teammate's question is visible only through visible work filed under it. The
+  `project_id` branch is gone.
+- A theme is hidden from a viewer if it holds, or ever held, an insight outside their scope.
+  Earlier revisions count because a name written about a hidden insight stays after the
+  insight is taken out. The cost: such a theme never comes back for that viewer, even after
+  it is rewritten.
+- A group with a hidden question shows the first visible question's name and no rationale.
+  "Hidden" is literal: a member question that is archived, or that has lost its last filed
+  item, is hidden from everyone but its owner, so the typed name stops showing for them
+  until that question is taken out of the group.
+- The scope is re-checked against Cortico per session every `team.access_recheck_minutes`.
+  The cache is process memory, so on Vercel each warm function instance keeps its own and a
+  cold start asks again.
+- The two paid routes save a run row with a fingerprint first and do not repeat an
+  identical request.
+- **One group per question is checked, not constrained.** `_claim_for_active_group` locks
+  the question rows (Postgres) and re-reads memberships before the insert. There is no
+  unique constraint, because the member table's columns are frozen.
+- **Not measured:** no model was called, and nothing was run against Postgres or the real
+  Cortico API, so the row lock and the `/v2/me` plus `/v2/projects` lookup are untested there.
+- Tests: `test_team.py` has 10 tests (205 in all). Each guard in `services/team.py` was
+  turned off in turn and a test failed each time.

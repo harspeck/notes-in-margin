@@ -21,3 +21,16 @@ export const personCounts = (p: TeamPerson) =>
     plural(p.insight_count, "insight"),
     plural(p.question_count, "question"),
   ].join(" · ");
+
+/** The server's own sentence for a refused write, without the status and path api.ts puts in front. */
+export function teamError(e: unknown): string {
+  const message = e instanceof Error ? e.message : String(e);
+  const body = message.slice(message.indexOf(": ") + 2);
+  try {
+    const detail = (JSON.parse(body) as { detail?: unknown }).detail;
+    if (typeof detail === "string") return detail;
+  } catch {
+    // Not a JSON body: a network failure, shown as it is.
+  }
+  return message;
+}

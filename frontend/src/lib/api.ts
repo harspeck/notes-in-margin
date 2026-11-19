@@ -344,6 +344,13 @@ export const api = {
     request<TeamTheme>(`/team/question_groups/${groupId}/themes`, { method: "POST", body: JSON.stringify(body) }),
   updateTeamTheme: (id: number, body: { name?: string; definition?: string }) =>
     request<TeamTheme>(`/team/themes/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  addTeamThemeMember: (id: number, connectionId: number) =>
+    request<TeamTheme>(`/team/themes/${id}/members`, {
+      method: "POST",
+      body: JSON.stringify({ connection_id: connectionId }),
+    }),
+  removeTeamThemeMember: (id: number, connectionId: number) =>
+    request<TeamTheme>(`/team/themes/${id}/members/${connectionId}`, { method: "DELETE" }),
   setTeamThemeMembers: (id: number, connectionIds: number[]) =>
     request<TeamTheme>(`/team/themes/${id}/members`, {
       method: "PUT",
